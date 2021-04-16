@@ -257,7 +257,7 @@ def history_routes_load(rmp, routes):
 
 		added_column = gp.Column(routes[m]['column'], rmp.getConstrs())
 
-		routes[m]['var'] = rmp.addVar(column=added_column, obj=routes[m]['distance'], vtype=GRB.BINARY)
+		routes[m]['var'] = rmp.addVar(column=added_column, obj=routes[m]['distance'])
 
 	rmp.update()
 
@@ -266,7 +266,8 @@ def history_routes_load(rmp, routes):
 
 def main(customers, capacity, customer_number, dis):
 	rmp, routes = set_cover(customers, capacity, customer_number, dis)
-	# rmp, routes = history_routes_load(rmp, routes)
+	rmp, routes = history_routes_load(rmp, routes)
+	print(len(routes))
 	routes_store = {}
 	rmp.optimize()
 
@@ -315,7 +316,7 @@ def main(customers, capacity, customer_number, dis):
 
 if __name__ == '__main__':
 	start = time.time()
-	customers, capacity, customer_number, best_know = problem_read('problem2.txt')
+	customers, capacity, customer_number, best_know = problem_read('problem.txt')
 	dis = dis_calcul(customers, customer_number)
 	main(customers, capacity, customer_number, dis)
 	print(time.time() - start)
