@@ -20,14 +20,13 @@ def dominate(new_label, label_list, queue):
 
 		queue = list(filter(lambda x: not x.dominated, queue))
 		label_list = list(filter(lambda x: not x.dominated, label_list))
-	else:
-		return queue,label_list
 
 	return queue, label_list
 
 
-def labeling_algorithm(dis, customers, capacity, customer_number):
+def labeling_algorithm(pi,dis, customers, capacity, customer_number):
 	customer_list = [i for i in range(customer_number + 2)]
+	new_pi = [0]+pi
 	label = Label()
 	label.path = [0]
 	label.dis = 0
@@ -38,6 +37,7 @@ def labeling_algorithm(dis, customers, capacity, customer_number):
 	path_dic = {}
 
 	while len(queue) > 0:
+		print(len(queue))
 		current = queue.pop()
 
 		last_node = current.path[-1]
@@ -52,21 +52,14 @@ def labeling_algorithm(dis, customers, capacity, customer_number):
 				new_label = Label()
 				new_label.path = current.path[:] + [customer]
 				new_label.demand = current.demand + customers[customer]['demand']
-				new_label.dis = current.dis + dis[last_node, customer]
+				new_label.dis = current.dis + dis[last_node, customer]-new_pi[last_node]
 
 				if customer in path_dic:
-					print('?')
 					queue, path_dic[customer] = dominate(new_label, path_dic[customer], queue)
 
-
 				else:
-					print('??')
-					exit()
 					path_dic[customer] = [new_label]
-					# print('???')
-					# exit()
 					queue.append(new_label)
-
 
 	final_labels = path_dic[customer_number + 1]
 	min_cost = 100000
