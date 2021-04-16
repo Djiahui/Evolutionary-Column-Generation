@@ -37,7 +37,6 @@ def labeling_algorithm(pi,dis, customers, capacity, customer_number):
 	path_dic = {}
 
 	while len(queue) > 0:
-		print(len(queue))
 		current = queue.pop()
 
 		last_node = current.path[-1]
@@ -69,4 +68,4 @@ def labeling_algorithm(pi,dis, customers, capacity, customer_number):
 			min_cost = label.dis
 			best_label = label
 
-	return best_label
+	return best_label.dis,best_label.path[1:]

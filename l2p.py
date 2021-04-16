@@ -93,6 +93,7 @@ def path_eva(path, customers, dis):
 
 def set_cover(customers, capacity, number, dis):
 	rmp = gp.Model('rmp')
+	rmp.Params.logtoconsole = 0
 	routes = {}
 	for i in range(number):
 		index = i + 1
@@ -101,6 +102,7 @@ def set_cover(customers, capacity, number, dis):
 		routes[index]['column'] = column
 		routes[index]['demand'] = total_demand
 		routes[index]['distance'] = distance
+		routes[index]['route'] = [index,customer_number+1]
 
 		routes[index]['var'] = rmp.addVar(ub=1, lb=0, obj=distance, name='x')
 
@@ -266,7 +268,7 @@ def history_routes_load(rmp, routes):
 
 def main(customers, capacity, customer_number, dis):
 	rmp, routes = set_cover(customers, capacity, customer_number, dis)
-	rmp, routes = history_routes_load(rmp, routes)
+	# rmp, routes = history_routes_load(rmp, routes)
 	print(len(routes))
 	routes_store = {}
 	rmp.optimize()
@@ -276,8 +278,8 @@ def main(customers, capacity, customer_number, dis):
 	sub_obj = []
 
 	# obj,path = price_problem(dual, dis, customers, capacity, customer_number)
-	final_label = labeling_Algoithm.labeling_algorithm(dual, dis, customers, capacity, customer_number)
-	obj, path = SPP.spp(dual, dis, customers, capacity, customer_number)
+	obj,path = labeling_Algoithm.labeling_algorithm(dual, dis, customers, capacity, customer_number)
+	# obj, path = SPP.spp(dual, dis, customers, capacity, customer_number)
 	while obj < 0:
 		column, total_demand, distance = path_eva(path, customers, dis)
 		print(obj, column)
@@ -299,7 +301,7 @@ def main(customers, capacity, customer_number, dis):
 		rmp.optimize()
 		dual = rmp.getAttr(GRB.Attr.Pi, rmp.getConstrs())
 		print([routes[i]['var'].x for i in range(1, l + 1)])
-		obj, path = SPP.spp(dual, dis, customers, capacity, customer_number)
+		obj,path = labeling_Algoithm.labeling_algorithm(dual, dis, customers, capacity, customer_number)
 
 	for key in routes.keys():
 		routes[key]['var'].vtype = GRB.BINARY
