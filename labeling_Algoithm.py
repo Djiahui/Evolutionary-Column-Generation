@@ -60,8 +60,8 @@ def labeling_algorithm(dis, customers, capacity, customer_number):
 
 
 				else:
-					# print('??')
-					# exit()
+					print('??')
+					exit()
 					path_dic[customer] = [new_label]
 					# print('???')
 					# exit()
