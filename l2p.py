@@ -268,7 +268,7 @@ def history_routes_load(rmp, routes):
 
 def main(customers, capacity, customer_number, dis):
 	rmp, routes = set_cover(customers, capacity, customer_number, dis)
-	# rmp, routes = history_routes_load(rmp, routes)
+	rmp, routes = history_routes_load(rmp, routes)
 	print(len(routes))
 	routes_store = {}
 	rmp.optimize()
