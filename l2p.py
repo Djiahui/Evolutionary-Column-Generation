@@ -57,7 +57,7 @@ def dis_calcul(customers, number):
 			if i == number + 1 and j == 0:
 				dis[(i, j)] = 1e6
 			temp = [customers[i]['loc'][0] - customers[j]['loc'][0], customers[i]['loc'][1] - customers[j]['loc'][1]]
-			dis[(i, j)] = math.sqrt(temp[0] * temp[0] + temp[1] * temp[1])
+			dis[(i, j)] = round(math.sqrt(temp[0] * temp[0] + temp[1] * temp[1]),2)
 	return dis
 
 
@@ -123,6 +123,14 @@ def history_routes_load(rmp, routes):
 
 	return rmp, routes
 
+def plot(path,customers):
+	pre = 0
+	for cus in path:
+		plt.plot((customers[pre]['loc'][0], customers[cus]['loc'][0]),
+				 (customers[pre]['loc'][1], customers[cus]['loc'][1]))
+		plt.text(customers[pre]['loc'][0], customers[pre]['loc'][1], str(pre), verticalalignment='bottom')
+		pre = cus
+	plt.show()
 
 def main(customers, capacity, customer_number, dis):
 	rmp, routes = set_cover(customers, capacity, customer_number, dis)
@@ -136,6 +144,7 @@ def main(customers, capacity, customer_number, dis):
 
 	# obj,path = SPP.price_problem(dual, dis, customers, capacity, customer_number)
 	obj,path = labeling_Algoithm.labeling_algorithm(dual, dis, customers, capacity, customer_number)
+	plot(path,customers)
 	print(obj,path)
 	obj,path = SPP.spp(dual, dis, customers, capacity, customer_number)
 	print(obj, path)

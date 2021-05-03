@@ -26,7 +26,7 @@ def dominate(new_label, label_list):
 def labeling_algorithm(pi, dis, customers, capacity, customer_number):
     global_path = [0, 26, 31, 22, 3, 36, 35, 29, 21, 50, 10, 39, 45, 15, 42, 40, 19, 17, 51]
     customer_list = [i for i in range(customer_number + 2)]
-    new_pi = [0] + pi
+    new_pi = [0] + pi + [0]
     label = Label()
     label.path = [0]
     label.dis = 0
@@ -38,8 +38,13 @@ def labeling_algorithm(pi, dis, customers, capacity, customer_number):
 
     while len(queue) > 0:
         current = queue.pop(0)
+        if current.path == global_path[:len(current.path)]:
+            print(len(current.path))
+            print(current.path)
         if current.dominated:
             continue
+
+
 
         last_node = current.path[-1]
         if last_node == customer_number + 1:
@@ -55,10 +60,10 @@ def labeling_algorithm(pi, dis, customers, capacity, customer_number):
                 new_label.demand = current.demand + customers[customer]['demand']
                 new_label.dis = current.dis + dis[last_node, customer] - new_pi[last_node]
 
-                if new_label.path == global_path[:len(new_label.path)]:
-                    print(len(new_label.path))
-                    if new_label.dominated:
-                        print(global_path[:len(new_label.path)])
+                # if new_label.path == global_path[:len(new_label.path)]:
+                #     print(len(new_label.path))
+                #     if new_label.dominated:
+                #         print(global_path[:len(new_label.path)])
 
                 if customer == customer_number + 1:
                     if customer in path_dic:
@@ -73,7 +78,8 @@ def labeling_algorithm(pi, dis, customers, capacity, customer_number):
                 else:
                     path_dic[customer] = [new_label]
 
-                queue.append(new_label)
+                if not new_label.dominated:
+                    queue.append(new_label)
 
     final_labels = path_dic[customer_number + 1]
     min_cost = 100000
