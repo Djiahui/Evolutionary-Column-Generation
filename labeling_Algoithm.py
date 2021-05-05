@@ -4,18 +4,18 @@ class Label(object):
         self.demand = []
         self.dis = []
         self.dominated = False
+        self.length = 0
 
 
 def dominate(new_label, label_list):
     for label in label_list:
-        if label.dis <= new_label.dis and label.demand <= new_label.demand:
-            if not label.dis == new_label.dis and label.demand == new_label.demand:
+        if new_label.length <= label.length:
+            if label.dis <= new_label.dis and label.demand <= new_label.demand and set(new_label.path).issubset(set(label.path)):
                 new_label.dominated = True
                 break
-        else:
-            if new_label.dis <= label.dis and new_label.demand <= label.demand:
-                if not label.dis == new_label.dis and label.demand == new_label.demand:
-                    label.dominated = True
+        elif new_label.length >= label.length:
+            if new_label.dis <= label.dis and new_label.demand <= label.demand and set(label.path).issubset(set(new_label.path)):
+                label.dominated = True
     if not new_label.dominated:
         label_list.append(new_label)
         label_list = list(filter(lambda x: not x.dominated, label_list))
@@ -31,6 +31,7 @@ def labeling_algorithm(pi, dis, customers, capacity, customer_number):
     label.path = [0]
     label.dis = 0
     label.demand = 0
+    label.length = 1
 
     queue = [label]
 
@@ -59,6 +60,7 @@ def labeling_algorithm(pi, dis, customers, capacity, customer_number):
                 new_label.path = current.path[:] + [customer]
                 new_label.demand = current.demand + customers[customer]['demand']
                 new_label.dis = current.dis + dis[last_node, customer] - new_pi[last_node]
+                new_label.length = current.length+1
 
                 # if new_label.path == global_path[:len(new_label.path)]:
                 #     print(len(new_label.path))

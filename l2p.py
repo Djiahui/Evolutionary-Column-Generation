@@ -148,6 +148,7 @@ def main(customers, capacity, customer_number, dis):
 	print(obj,path)
 	obj,path = SPP.spp(dual, dis, customers, capacity, customer_number)
 	print(obj, path)
+	exit(0)
 	while obj < 0:
 		column, total_demand, distance,routes = path_eva(path, customers, dis,routes)
 		print(obj, column)
