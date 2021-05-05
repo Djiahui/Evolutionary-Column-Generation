@@ -7,6 +7,32 @@ import time
 import SPP
 import labeling_Algoithm
 import pickle
+import pandas as pd
+
+def problem_csv():
+	flag = None
+	customers = {}
+
+
+	with open('data/C101_200.csv') as p:
+		for line in p:
+			if not flag:
+				flag = True
+				pass
+
+			else:
+				temp = line.split(',')
+				length = len(customers)
+				customers[length] = {}
+				customers[length]['loc'] = [float(temp[1]),float(temp[2])]
+				customers[length]['demand'] = int(float(temp[3]))
+				customers[length]['start'] = int(float(temp[4]))
+				customers[length]['end'] = int(float(temp[5]))
+				customers[length]['service'] = int(float(temp[6]))
+
+
+
+	return customers, 200, len(customers)-1
 
 
 def problem_read(path):
@@ -180,6 +206,8 @@ def main(customers, capacity, customer_number, dis):
 
 
 if __name__ == '__main__':
+	customers,capacity,customer_number = problem_csv()
+	exit()
 	start = time.time()
 	customers, capacity, customer_number, best_know = problem_read('problem.txt')
 	dis = dis_calcul(customers, customer_number)
