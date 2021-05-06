@@ -29,10 +29,14 @@ def problem_csv():
 				customers[length]['start'] = int(float(temp[4]))
 				customers[length]['end'] = int(float(temp[5]))
 				customers[length]['service'] = int(float(temp[6]))
+		length = len(customers)
+		customers[length] = customers[0]
 
 
 
-	return customers, 200, len(customers)-1
+
+
+	return customers, 200, len(customers)-2
 
 
 def problem_read(path):
@@ -158,8 +162,77 @@ def plot(path,customers):
 		pre = cus
 	plt.show()
 
+def path_test_vrptw(path,customers,capacity,dis):
+	pre = 0
+	load = 0
+	time = 0
+	fea = True
+	for cus in path[1:-1]:
+		time = time+dis[pre,cus]
+		load = load+customers[cus]['demand']
+		if time>customers[cus]['end']:
+			fea = False
+			break
+		if load >capacity:
+			fea = False
+			break
+		time = max(time,customers[cus]['start'])+customers[cus]['service']
+
+	return fea
+
+
+def initial_routes_generates(customers, capacity, customer_number, dis):
+	customer_list = [i for i in range(1,customer_number+1)]
+	to_visit = customer_list[:]
+	routes = []
+	route = [0]
+	temp_load = 0
+	temp_time = 0
+
+	while customer_list:
+		for customer in customer_list:
+			if customers[customer]['demand']+temp_load<capacity:
+				temp = temp_time+dis[route[-1],customer]
+				if temp<=customers[customer]['end']:
+					temp_time = max(temp,customers[customer]['start'])+customers[customer]['service']
+					temp_load = temp_load+customers[customer]['demand']
+					route.append(customer)
+					to_visit.remove(customer)
+				else:
+					if customer==customer_list[-1]:
+						route.append(customer_number+1)
+						routes.append(route[:])
+						route = [0]
+						temp_load = 0
+						temp_time = 0
+			else:
+				if customer == customer_list[-1]:
+					route.append(customer_number + 1)
+					routes.append(route[:])
+					route = [0]
+					temp_load = 0
+					temp_time = 0
+
+
+		customer_list = to_visit[:]
+
+	for route in routes:
+		print(route)
+		print(path_test_vrptw(route,customers,capacity,dis))
+
+
+
+
+
+
+
+	pass
+
+
 def main(customers, capacity, customer_number, dis):
+	initial_routes_generates(customers,capacity,customer_number,dis)
 	rmp, routes = set_cover(customers, capacity, customer_number, dis)
+
 	# rmp, routes = history_routes_load(rmp, routes)
 	print(len(routes))
 	rmp.optimize()
@@ -207,7 +280,9 @@ def main(customers, capacity, customer_number, dis):
 
 if __name__ == '__main__':
 	customers,capacity,customer_number = problem_csv()
-	exit()
+	dis = dis_calcul(customers, customer_number)
+	main(customers, capacity, customer_number, dis)
+
 	start = time.time()
 	customers, capacity, customer_number, best_know = problem_read('problem.txt')
 	dis = dis_calcul(customers, customer_number)
