@@ -22,12 +22,14 @@ class Label(object):
 def dominate(new_label, label_list):
     for label in label_list:
         if new_label.length <= label.length:
-            if label.dis <= new_label.dis and label.demand <= new_label.demand and label.time<=new_label.time and set(new_label.path).issubset(set(label.path)):
-                new_label.dominated = True
-                break
+            if label.dis <= new_label.dis and label.demand <= new_label.demand and label.time<=new_label.time:
+                if set(new_label.path).issubset(set(label.path)):
+                    new_label.dominated = True
+                    break
         elif new_label.length >= label.length:
-            if new_label.dis <= label.dis and new_label.demand <= label.demand and new_label.time<= label.time and set(label.path).issubset(set(new_label.path)):
-                label.dominated = True
+            if new_label.dis <= label.dis and new_label.demand <= label.demand and new_label.time<= label.time:
+                if set(label.path).issubset(set(new_label.path)):
+                    label.dominated = True
     if not new_label.dominated:
         label_list.append(new_label)
         label_list = list(filter(lambda x: not x.dominated, label_list))
@@ -62,13 +64,16 @@ def labeling_algorithm(pi, dis, customers, capacity, customer_number):
             if customer in current.path:
                 continue
 
-            if current.demand + customers[customer]['demand']<=capacity and current.time+dis[last_node,customer]<customers[customer]['end']:
+            if current.demand + customers[customer]['demand']<=capacity and current.time+dis[last_node,customer]<=customers[customer]['end']:
+                print('=====')
+                print(current.time)
+                print(current.time+dis[last_node,customer])
+                print(customers[customer]['start'],customers[customer]['end'])
                 new_label = current.expand(customers,customer,dis,last_node,new_pi)
+                print(new_label.path)
+                print(customers[customer]['service'])
+                print(new_label.time)
 
-                # if new_label.path == global_path[:len(new_label.path)]:
-                #     print(len(new_label.path))
-                #     if new_label.dominated:
-                #         print(global_path[:len(new_label.path)])
 
                 if customer == customer_number + 1:
                     if customer in path_dic:

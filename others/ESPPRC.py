@@ -2,53 +2,17 @@ import numpy as np
 from collections import deque
 from functools import lru_cache
 
-
-class Customer:
-    """A customer is a node of the graph. It has an index, a location and
-       resource requests.
-
-       There is an order relation between customers, namely the lexicographic
-       order, so a customer goes before another when its index is less than the
-       other's.
-       Also, customers can be used directly in indexing data structures.
-
-       Attributes:
-           index: index used to determine lexicographic order
-           coords: the coordinates where the customer is placed
-           demand: the amount of resource requested
-           time_window: interval of time in which the resource must be delivered
-    """
-
-    def __init__(self, index, coords, demand, time_window, service_time):
-        self.index = index
-        self.coords = coords
-        self.demand = demand
-        self.time_window = time_window
-        self.service_time = service_time
-
-    def __lt__(self, other):
-        return self.index < other.index
-
-    def __index__(self):
-        return self.index
-
-    def __hash__(self):
-        return self.index
-
-    def __repr__(self):
-        return f"Customer <{self.index}>"
-
 class Label:
     """A label describes a path from the depot to a customer and the resources
        used in this path.
-
+       
        Labels are associated with a customer and are used to identify each
        feasible state in which that customer can be reached.
-
+       
        A dominance relation between labels is needed (see 'dominates' method for
        more information) so only 'best' labels can be kept on a node resulting
        in fewer paths to be explored.
-
+       
        Attributes:
            customer: the customer whom this label is associated with
            cost: the accumulated cost
@@ -81,16 +45,17 @@ class Label:
             label = label.prev
         path.append(label.customer)
         return list(reversed(path))
-
+	
     def dominates(self, label):
         """A label is called 'dominant' when compared to another label, if
            it uses less resources than the other label, meaning that all of
            its resources must be less than or equal to the other's, but there
            must be at least one resource that is different.
+
            Since two perfectly equals labels describe the same path, it is
            possible to throw away one of them by modifying the above definition
            and letting l1 dominate l2 even if they have the same resources.
-
+           
            Arguments:
                label: the label to compare with
            Returns:
@@ -122,7 +87,6 @@ class Label:
                 labels.append(label)
         self.customer.labels = labels
 
-
 class ESP_Label(Label):
     """Extension of base Label used to describe elementary paths only.
        To do that the unreachable customers set contains also the visited
@@ -132,7 +96,7 @@ class ESP_Label(Label):
     def __init__(self, *args):
         super().__init__(*args)
         self.unreachable_cs.add(self.customer)
-
+    
     def dominates(self, label):
         # Note that having the unreachable customers set as a resource means
         # that a label uses less of this resource if it possesses a subset of
@@ -140,15 +104,15 @@ class ESP_Label(Label):
         return (super().dominates(label)
                 and self.unreachable_cs.issubset(label.unreachable_cs))
 
-
 class ESPPRC:
     """The Elementary Shortest Path Problem with Resource Constraints
        instance class.
-
+       
        It stores instance data and is able to solve the ESPPRC problem with an
        exact dynamic programming approach.
        It uses a dual variable array so it can be used in a column generation
        approach for vehicle routing problems.
+
        Attributes:
            capacity: maximum capacity of each vehicle
            customers: a list of Customer objects
@@ -176,7 +140,7 @@ class ESPPRC:
             # label.dominated becomes true and it can be skipped
             if from_label.dominated:
                 continue
-
+            
             to_labels = self.feasible_labels_from(from_label)
             for to_label in to_labels:
                 to_cus = to_label.customer
@@ -208,7 +172,7 @@ class ESPPRC:
 
         to_labels = []
         for to_cus in (self.customers - from_label.unreachable_cs
-                       - {from_label.customer}):
+                                      - {from_label.customer}):
             to_label = self.extended_label(from_label, to_cus)
             if not to_label:
                 from_label.unreachable_cs.add(to_cus)
@@ -218,7 +182,7 @@ class ESPPRC:
 
     def extended_label(self, from_label, to_cus):
         """Returns a new label that extends 'from_label' and goes to 'to_cus'.
-
+           
            Arguments:
                from_label: the label to start from
                to_cus: the customer to reach
@@ -230,28 +194,16 @@ class ESPPRC:
         load = from_label.load + to_cus.demand
         if load > self.capacity:
             return
-
+        
         from_cus = from_label.customer
         time = max(from_label.time + from_cus.service_time
-                   + self.times[from_cus, to_cus],
+                                   + self.times[from_cus, to_cus],
                    to_cus.time_window[0])
         if time > to_cus.time_window[1]:
             return
 
         cost = (from_label.cost + self.costs[from_cus, to_cus]
-                - self.duals[from_cus])
+                                - self.duals[from_cus])
         # unreachable customers update is delayed since from_label needs to
         # visit every customer before knowing its own set
         return self.label_cls(to_cus, cost, load, time, from_label)
-
-
-
-def t(pi, dis, customers, capacity, customer_number):
-    tempcustomers = []
-    for k,v in customers:
-        tempcustomers.append(Customer(k,v['loc'],v['demand'],[v['start'],v['end']],v['service']))
-
-
-    temp_cls = ESPPRC(capacity,tempcustomers,dis,dis)
-    temp_cls.duals = pi
-

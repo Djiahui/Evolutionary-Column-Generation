@@ -5,7 +5,7 @@ import math
 import matplotlib.pyplot as plt
 import time
 import SPP
-import labeling_Algoithm
+import labeling_Algoithm_vrptw
 import pickle
 import pandas as pd
 
@@ -272,7 +272,7 @@ def main(customers, capacity, customer_number, dis):
 	# obj,path = SPP.spp(dual, dis, customers, capacity, customer_number)
 
 
-	obj,path = labeling_Algoithm.labeling_algorithm(dual, dis, customers, capacity, customer_number)
+	obj,path = labeling_Algoithm_vrptw.labeling_algorithm(dual, dis, customers, capacity, customer_number)
 	while obj < 0:
 		column, total_demand, distance,routes = path_eva(path, customers, dis,routes)
 		print(obj, column)
