@@ -233,12 +233,12 @@ class ESPPRC:
 
         from_cus = from_label.customer
         time = max(from_label.time + from_cus.service_time
-                   + self.times[from_cus, to_cus],
+                   + self.times[from_cus.index, to_cus.index],
                    to_cus.time_window[0])
         if time > to_cus.time_window[1]:
             return
 
-        cost = (from_label.cost + self.costs[from_cus, to_cus]
+        cost = (from_label.cost + self.costs[from_cus.index, to_cus.index]
                 - self.duals[from_cus])
         # unreachable customers update is delayed since from_label needs to
         # visit every customer before knowing its own set
@@ -248,10 +248,15 @@ class ESPPRC:
 
 def t(pi, dis, customers, capacity, customer_number):
     tempcustomers = []
-    for k,v in customers:
+    for k,v in customers.items():
         tempcustomers.append(Customer(k,v['loc'],v['demand'],[v['start'],v['end']],v['service']))
 
 
     temp_cls = ESPPRC(capacity,tempcustomers,dis,dis)
-    temp_cls.duals = pi
+    temp_cls.duals = [0]+pi
+
+
+
+
+    temp_cls.solve()
 

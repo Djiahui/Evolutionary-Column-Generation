@@ -8,6 +8,7 @@ import SPP
 import labeling_Algoithm_vrptw
 import pickle
 import pandas as pd
+import labeling_approach
 
 def problem_csv(num):
 	flag = False
@@ -272,7 +273,8 @@ def main(customers, capacity, customer_number, dis):
 	# obj,path = SPP.spp(dual, dis, customers, capacity, customer_number)
 
 
-	obj,path = labeling_Algoithm_vrptw.labeling_algorithm(dual, dis, customers, capacity, customer_number)
+	#obj,path = labeling_Algoithm_vrptw.labeling_algorithm(dual, dis, customers, capacity, customer_number)
+	labeling_approach.t(dual,dis,customers,capacity,customer_number)
 	while obj < 0:
 		column, total_demand, distance,routes = path_eva(path, customers, dis,routes)
 		print(obj, column)

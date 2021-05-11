@@ -6,6 +6,7 @@ class Label(object):
         self.dominated = False
         self.length = 0
         self.time = 0
+        self.unreachable_cus = set()
 
     def expand(self,customers,customer,dis,last_node,new_pi):
         new_label = Label()
@@ -14,6 +15,7 @@ class Label(object):
         new_label.dis = self.dis + dis[last_node, customer] - new_pi[last_node]
         new_label.time = max(self.time + dis[last_node, customer], customers[customer]['start'])+customers[customer]['service']
         new_label.length = self.length + 1
+        new_label.unreachable_cus.add(customer)
 
 
         return new_label
@@ -47,8 +49,10 @@ def labeling_algorithm(pi, dis, customers, capacity, customer_number):
     label.length = 1
 
     queue = [label]
+    queue[-1].unreachable_cus.add(0)
 
     path_dic = {}
+    path_dic[customer_number+1] = []
 
     while len(queue) > 0:
         current = queue.pop(0)
@@ -60,36 +64,29 @@ def labeling_algorithm(pi, dis, customers, capacity, customer_number):
         last_node = current.path[-1]
         if last_node == customer_number + 1:
             continue
+
+        temp_labels = []
         for customer in customer_list:
-            if customer in current.path:
+            if customer in current.unreachable_cus:
                 continue
-
             if current.demand + customers[customer]['demand']<=capacity and current.time+dis[last_node,customer]<=customers[customer]['end']:
-                print('=====')
-                print(current.time)
-                print(current.time+dis[last_node,customer])
-                print(customers[customer]['start'],customers[customer]['end'])
-                new_label = current.expand(customers,customer,dis,last_node,new_pi)
-                print(new_label.path)
-                print(customers[customer]['service'])
-                print(new_label.time)
+                temp_labels.append(current.expand(customers,customer,dis,last_node,new_pi))
+            else:
+                current.unreachable_cus.add(customer)
 
-
-                if customer == customer_number + 1:
-                    if customer in path_dic:
-                        path_dic[customer].append(new_label)
-                    else:
-                        path_dic[customer] = [new_label]
-
-                    continue
-
-                if customer in path_dic:
-                    path_dic[customer] = dominate(new_label, path_dic[customer])
+        for new_label in temp_labels:
+            if new_label.path[-1]==customer_number+1:
+                path_dic[customer_number+1].append(new_label)
+                continue
+            else:
+                if new_label.path[-1] in path_dic:
+                    new_label.unreachable_cus.update(current.unreachable_cus)
+                    path_dic[new_label.path[-1]] = dominate(new_label,path_dic[new_label.path[-1]])
                 else:
-                    path_dic[customer] = [new_label]
+                    path_dic[new_label.path[-1]] = [new_label]
 
-                if not new_label.dominated:
-                    queue.append(new_label)
+            if not new_label.dominated:
+                queue.append(new_label)
 
     final_labels = path_dic[customer_number + 1]
     min_cost = 100000
