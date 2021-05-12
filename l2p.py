@@ -308,9 +308,3 @@ if __name__ == '__main__':
 	customers,capacity,customer_number = problem_csv(50)
 	dis = dis_calcul(customers, customer_number)
 	main(customers, capacity, customer_number, dis)
-
-	start = time.time()
-	customers, capacity, customer_number, best_know = problem_read('problem.txt')
-	dis = dis_calcul(customers, customer_number)
-	main(customers, capacity, customer_number, dis)
-	print(time.time() - start)
