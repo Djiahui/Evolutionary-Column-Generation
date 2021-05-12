@@ -273,23 +273,30 @@ def main(customers, capacity, customer_number, dis):
 
 
 	obj,path = labeling_Algoithm_vrptw.labeling_algorithm(dual, dis, customers, capacity, customer_number)
-	labeling_approach.t(dual,dis,customers,capacity,customer_number)
+	# labeling_approach.t(dual,dis,customers,capacity,customer_number)
 	while obj < 0:
-		column, total_demand, distance,routes = path_eva(path, customers, dis,routes)
-		print(obj, column)
+		fea,routes = path_eva_vrptw(path,customers,capacity,dis,routes)
+		if not fea:
+			print('broken')
+			exit()
+		print(obj,path)
 		sub_obj.append(obj)
 		if len(sub_obj) > 2:
 			if sub_obj[-1] == sub_obj[-2]:
 				print('strange')
 				del routes[len(routes)]
 				break
-		added_column = gp.Column(column, rmp.getConstrs())
 
-		routes[len(routes)]['var'] = rmp.addVar(column=added_column, obj=distance)
+		length = len(routes)
+
+
+		added_column = gp.Column(routes[length]['column'], rmp.getConstrs())
+
+		routes[length]['var'] = rmp.addVar(column=added_column, obj=routes[length]['distance'])
 		rmp.optimize()
 		dual = rmp.getAttr(GRB.Attr.Pi, rmp.getConstrs())
 		print([routes[i]['var'].x for i in range(1, len(routes) + 1)])
-		obj,path = SPP.spp(dual, dis, customers, capacity, customer_number)
+		obj,path = labeling_Algoithm_vrptw.labeling_algorithm(dual, dis, customers, capacity, customer_number)
 
 	for key in routes.keys():
 		routes[key]['var'].vtype = GRB.BINARY

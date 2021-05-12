@@ -41,7 +41,6 @@ def dominate(new_label, label_list):
 
 
 def labeling_algorithm(pi, dis, customers, capacity, customer_number):
-    t0 = time.time()
     customer_list = [i for i in range(customer_number + 2)]
     new_pi = [0] + pi + [0]
     label = Label()
@@ -98,7 +97,5 @@ def labeling_algorithm(pi, dis, customers, capacity, customer_number):
             min_cost = label.dis
             best_label = label
 
-    print(time.time()-t0)
-    exit()
 
     return best_label.dis, best_label.path[1:]
