@@ -83,10 +83,9 @@ def dis_calcul(customers, number):
 			if i == j:
 				continue
 			if i == 0 and j == number + 1:
-				dis[(i, j)] = 1e6
-				continue
+				dis[(i, j)] = 0
 			if i == number + 1 and j == 0:
-				dis[(i, j)] = 1e6
+				dis[(i, j)] = 0
 			temp = [customers[i]['loc'][0] - customers[j]['loc'][0], customers[i]['loc'][1] - customers[j]['loc'][1]]
 			dis[(i, j)] = round(math.sqrt(temp[0] * temp[0] + temp[1] * temp[1]),2)
 	return dis
@@ -273,7 +272,7 @@ def main(customers, capacity, customer_number, dis):
 	# obj,path = SPP.spp(dual, dis, customers, capacity, customer_number)
 
 
-	#obj,path = labeling_Algoithm_vrptw.labeling_algorithm(dual, dis, customers, capacity, customer_number)
+	obj,path = labeling_Algoithm_vrptw.labeling_algorithm(dual, dis, customers, capacity, customer_number)
 	labeling_approach.t(dual,dis,customers,capacity,customer_number)
 	while obj < 0:
 		column, total_demand, distance,routes = path_eva(path, customers, dis,routes)

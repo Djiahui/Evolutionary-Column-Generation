@@ -1,3 +1,4 @@
+import time
 class Label(object):
     def __init__(self):
         self.path = []
@@ -25,12 +26,12 @@ def dominate(new_label, label_list):
     for label in label_list:
         if new_label.length <= label.length:
             if label.dis <= new_label.dis and label.demand <= new_label.demand and label.time<=new_label.time:
-                if set(new_label.path).issubset(set(label.path)):
+                if new_label.unreachable_cus.issubset(label.unreachable_cus):
                     new_label.dominated = True
                     break
         elif new_label.length >= label.length:
             if new_label.dis <= label.dis and new_label.demand <= label.demand and new_label.time<= label.time:
-                if set(label.path).issubset(set(new_label.path)):
+                if label.unreachable_cus.issubset(new_label.unreachable_cus):
                     label.dominated = True
     if not new_label.dominated:
         label_list.append(new_label)
@@ -40,6 +41,7 @@ def dominate(new_label, label_list):
 
 
 def labeling_algorithm(pi, dis, customers, capacity, customer_number):
+    t0 = time.time()
     customer_list = [i for i in range(customer_number + 2)]
     new_pi = [0] + pi + [0]
     label = Label()
@@ -79,8 +81,8 @@ def labeling_algorithm(pi, dis, customers, capacity, customer_number):
                 path_dic[customer_number+1].append(new_label)
                 continue
             else:
+                new_label.unreachable_cus.update(current.unreachable_cus)
                 if new_label.path[-1] in path_dic:
-                    new_label.unreachable_cus.update(current.unreachable_cus)
                     path_dic[new_label.path[-1]] = dominate(new_label,path_dic[new_label.path[-1]])
                 else:
                     path_dic[new_label.path[-1]] = [new_label]
@@ -95,5 +97,8 @@ def labeling_algorithm(pi, dis, customers, capacity, customer_number):
         if label.dis < min_cost:
             min_cost = label.dis
             best_label = label
+
+    print(time.time()-t0)
+    exit()
 
     return best_label.dis, best_label.path[1:]
