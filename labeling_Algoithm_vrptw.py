@@ -21,27 +21,35 @@ class Label(object):
 
         return new_label
 
+    def dominated_determine(self,other):
+        if self.dis>=other.dis and self.demand>=other.demand and self.time>=other.time:
+            return True and other.unreachable_cus.issubset(self.unreachable_cus)
+        else:
+            return False
+
 
 def dominate(new_label, label_list):
     for label in label_list:
-        if new_label.length <= label.length:
-            if label.dis <= new_label.dis and label.demand <= new_label.demand and label.time<=new_label.time:
-                if new_label.unreachable_cus.issubset(label.unreachable_cus):
-                    new_label.dominated = True
-                    break
-        elif new_label.length >= label.length:
-            if new_label.dis <= label.dis and new_label.demand <= label.demand and new_label.time<= label.time:
-                if label.unreachable_cus.issubset(new_label.unreachable_cus):
-                    label.dominated = True
-    if not new_label.dominated:
-        label_list.append(new_label)
-        label_list = list(filter(lambda x: not x.dominated, label_list))
+        if new_label.dominated_determine(label):
+            new_label.dominated = True
+            return label_list
 
-    return label_list
+
+    res = []
+    for label in label_list:
+        if not label.dominated_determine(new_label):
+            res.append(label)
+        else:
+            label.dominated = False
+
+    res.append(new_label)
+
+    return res
+
 
 
 def labeling_algorithm(pi, dis, customers, capacity, customer_number):
-    customer_list = [i for i in range(customer_number + 2)]
+    customer_list = set([i for i in range(customer_number + 2)])
     new_pi = [0] + pi + [0]
     label = Label()
     label.path = [0]
@@ -67,7 +75,7 @@ def labeling_algorithm(pi, dis, customers, capacity, customer_number):
             continue
 
         temp_labels = []
-        for customer in customer_list:
+        for customer in (customer_list-current.unreachable_cus):
             if customer in current.unreachable_cus:
                 continue
             if current.demand + customers[customer]['demand']<=capacity and current.time+dis[last_node,customer]<=customers[customer]['end']:

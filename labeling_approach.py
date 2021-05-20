@@ -237,9 +237,8 @@ class ESPPRC:
                    to_cus.time_window[0])
         if time > to_cus.time_window[1]:
             return
-
         cost = (from_label.cost + self.costs[from_cus.index, to_cus.index]
-                - self.duals[from_cus])
+                - self.duals[from_cus.index])
         # unreachable customers update is delayed since from_label needs to
         # visit every customer before knowing its own set
         return self.label_cls(to_cus, cost, load, time, from_label)
@@ -249,6 +248,8 @@ class ESPPRC:
 def t(pi, dis, customers, capacity, customer_number):
     tempcustomers = []
     for k,v in customers.items():
+        if k==customer_number+1:
+            continue
         tempcustomers.append(Customer(k,v['loc'],v['demand'],[v['start'],v['end']],v['service']))
 
 
@@ -258,5 +259,10 @@ def t(pi, dis, customers, capacity, customer_number):
 
 
 
-    temp_cls.solve()
+    routes = temp_cls.solve()
+
+    return routes[0].cost,list(map(lambda x:x.index,routes[0].path))[1:-1]+[customer_number+1]
+
+
+
 

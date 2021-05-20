@@ -205,8 +205,6 @@ def path_eva_vrptw(path,customers,capacity,dis,routes):
 def initial_routes_generates(customers, capacity, customer_number, dis):
 	customer_list = [i for i in range(1,customer_number+1)]
 	to_visit = customer_list[:]
-	# customer_list = [10, 11, 14, 26, 66]
-	# to_visit = [10, 11, 14, 26, 66]
 	routes = []
 	route = [0]
 	temp_load = 0
@@ -271,9 +269,14 @@ def main(customers, capacity, customer_number, dis):
 	# obj,path = SPP.price_problem(dual, dis, customers, capacity, customer_number)
 	# obj,path = SPP.spp(dual, dis, customers, capacity, customer_number)
 
-
+	t0 = time.time()
 	obj,path = labeling_Algoithm_vrptw.labeling_algorithm(dual, dis, customers, capacity, customer_number)
-	# labeling_approach.t(dual,dis,customers,capacity,customer_number)
+	print(time.time()-t0)
+	print(obj,path)
+	t0 = time.time()
+	obj,path = labeling_approach.t(dual,dis,customers,capacity,customer_number)
+	print(time.time() - t0)
+	print(obj, path)
 	while obj < 0:
 		fea,routes = path_eva_vrptw(path,customers,capacity,dis,routes)
 		if not fea:
@@ -312,6 +315,6 @@ def main(customers, capacity, customer_number, dis):
 
 
 if __name__ == '__main__':
-	customers,capacity,customer_number = problem_csv(50)
+	customers,capacity,customer_number = problem_csv(70)
 	dis = dis_calcul(customers, customer_number)
 	main(customers, capacity, customer_number, dis)
