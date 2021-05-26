@@ -48,16 +48,65 @@ class Evaluator(object):
 		self.customer_number = customer_number
 		self.capacity = capacity
 
+		self.customer_list = set(range(1,customer_number+2))
+
 	def evaluate(self, x):
 		# MCTS_decoder
-		pass
+		root = Node(0,self.customers[0])
+
+		while True:
+
+			root.select()
+
+
 
 
 
 
 class Node(object):
-	def __init__(self):
+	def __init__(self,index,customer):
+		self.current = index
+		self.current_customer = customer
+		self.tabu = self.current_customer['tabu']
+		self.children = []
+		self.father = None
+
+		self.quality = 0
+		self.visited_times = 0
+		self.max_children = 5
+
+		self.max_reward = 0
+		self.min_reward = 0
+
+	def pre_sample(self,customer_list,matrix):
+		temp_reachable = list(customer_list-self.tabu)
+		if len(self.reachable)<self.max_children:
+			return set(temp_reachable)
+
+
+
+
+	def expand(self):
 		pass
+
+	def select(self):
+		pass
+
+	def backup(self):
+		pass
+
+	def rollout(self):
+		pass
+
+	def iteration(self):
+		self.select()
+		self.expand()
+
+
+
+
+
+
 
 
 if __name__ == '__main__':
