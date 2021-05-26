@@ -9,11 +9,11 @@ import labeling_Algoithm_vrptw
 import pickle
 import pandas as pd
 import labeling_approach
+import copy
 
 def problem_csv(num):
 	flag = False
 	customers = {}
-
 
 	with open('data/C101_200.csv') as p:
 		for line in p:
@@ -25,19 +25,32 @@ def problem_csv(num):
 				temp = line.split(',')
 				length = len(customers)
 				customers[length] = {}
-				customers[length]['loc'] = [float(temp[1]),float(temp[2])]
+				customers[length]['loc'] = [float(temp[1]), float(temp[2])]
 				customers[length]['demand'] = int(float(temp[3]))
 				customers[length]['start'] = int(float(temp[4]))
 				customers[length]['end'] = int(float(temp[5]))
 				customers[length]['service'] = int(float(temp[6]))
 
-
-				if length==num:
+				if length == num:
 					length = len(customers)
-					customers[length] = customers[0]
+					customers[length] = copy.deepcopy(customers[0])
 					break
 
 	return customers, 200, num
+
+
+def pre_process(customers, customer_number,dis):
+	for start, customer in customers.items():
+		customer['tabu'] = set()
+		if start==customer_number+1:
+			a = 0
+			return
+		for target in range(1, customer_number + 2):
+			if customer['start']+customer['service']+dis[start,target]>customers[target]['end']:
+				print(customer['start'],customer['service'],dis[start,target],customer['start']+customer['service']+dis[start,target],customers[target]['end'])
+				customer['tabu'].add(target)
+
+
 
 
 def problem_read(path):
@@ -81,17 +94,18 @@ def dis_calcul(customers, number):
 	for i in range(number + 2):
 		for j in range(number + 2):
 			if i == j:
+				dis[(i,j)] = 0
 				continue
 			if i == 0 and j == number + 1:
 				dis[(i, j)] = 0
 			if i == number + 1 and j == 0:
 				dis[(i, j)] = 0
 			temp = [customers[i]['loc'][0] - customers[j]['loc'][0], customers[i]['loc'][1] - customers[j]['loc'][1]]
-			dis[(i, j)] = round(math.sqrt(temp[0] * temp[0] + temp[1] * temp[1]),2)
+			dis[(i, j)] = round(math.sqrt(temp[0] * temp[0] + temp[1] * temp[1]), 2)
 	return dis
 
 
-def path_eva(path, customers, dis,routes):
+def path_eva(path, customers, dis, routes):
 	total_demand = 0
 	distance = 0
 	pre = 0
@@ -102,14 +116,14 @@ def path_eva(path, customers, dis,routes):
 
 	column = [1 if i in path else 0 for i in range(1, len(customers) - 1)]
 
-	n = len(routes)+1
+	n = len(routes) + 1
 	routes[n] = {}
 	routes[n]['demand'] = total_demand
 	routes[n]['distance'] = distance
 	routes[n]['column'] = column
 	routes[n]['route'] = path
 
-	return column, total_demand, distance,routes
+	return column, total_demand, distance, routes
 
 
 def set_cover(customers, capacity, number, dis):
@@ -117,10 +131,10 @@ def set_cover(customers, capacity, number, dis):
 	rmp.Params.logtoconsole = 0
 	routes = {}
 	for i in range(number):
-		index = i+1
-		fea,routes = path_eva_vrptw([index, customer_number + 1],customers,capacity,dis,routes)
+		index = i + 1
+		fea, routes = path_eva_vrptw([index, customer_number + 1], customers, capacity, dis, routes)
 		if not fea:
-			print('unfeasible',[index,customer_number])
+			print('unfeasible', [index, customer_number])
 		routes[index]['var'] = rmp.addVar(ub=1, lb=0, obj=routes[index]['distance'], name='x')
 
 	cons = rmp.addConstrs(routes[index]['var'] == 1 for index in range(1, number + 1))
@@ -155,7 +169,8 @@ def history_routes_load(rmp, routes):
 
 	return rmp, routes
 
-def plot(path,customers):
+
+def plot(path, customers):
 	pre = 0
 	for cus in path:
 		plt.plot((customers[pre]['loc'][0], customers[cus]['loc'][0]),
@@ -164,7 +179,8 @@ def plot(path,customers):
 		pre = cus
 	plt.show()
 
-def path_eva_vrptw(path,customers,capacity,dis,routes):
+
+def path_eva_vrptw(path, customers, capacity, dis, routes):
 	cost = 0
 	pre = 0
 	load = 0
@@ -172,38 +188,36 @@ def path_eva_vrptw(path,customers,capacity,dis,routes):
 	fea = True
 
 	for cus in path:
-		cost = cost+dis[pre,cus]
-		time = time+dis[pre,cus]
-		load = load+customers[cus]['demand']
+		cost = cost + dis[pre, cus]
+		time = time + dis[pre, cus]
+		load = load + customers[cus]['demand']
 
-		if cus==path[-1]:
+		if cus == path[-1]:
 			continue
 
-		if time>customers[cus]['end']:
+		if time > customers[cus]['end']:
 			fea = False
-			return fea,routes
-		if load >capacity:
+			return fea, routes
+		if load > capacity:
 			fea = False
-			return fea,routes
-		time = max(time,customers[cus]['start'])+customers[cus]['service']
+			return fea, routes
+		time = max(time, customers[cus]['start']) + customers[cus]['service']
 		pre = cus
 
-
 	if fea:
-		column = [1 if i in path else 0 for i in range(1,len(customers)-1)]
-		n = len(routes)+1
+		column = [1 if i in path else 0 for i in range(1, len(customers) - 1)]
+		n = len(routes) + 1
 		routes[n] = {}
 		routes[n]['demand'] = load
 		routes[n]['distance'] = cost
 		routes[n]['column'] = column
 		routes[n]['route'] = path
 
-
-	return fea,routes
+	return fea, routes
 
 
 def initial_routes_generates(customers, capacity, customer_number, dis):
-	customer_list = [i for i in range(1,customer_number+1)]
+	customer_list = [i for i in range(1, customer_number + 1)]
 	to_visit = customer_list[:]
 	routes = []
 	route = [0]
@@ -212,16 +226,16 @@ def initial_routes_generates(customers, capacity, customer_number, dis):
 
 	while customer_list:
 		for customer in customer_list:
-			if customers[customer]['demand']+temp_load<capacity:
-				temp = temp_time+dis[route[-1],customer]
-				if temp<=customers[customer]['end']:
-					temp_time = max(temp,customers[customer]['start'])+customers[customer]['service']
-					temp_load = temp_load+customers[customer]['demand']
+			if customers[customer]['demand'] + temp_load < capacity:
+				temp = temp_time + dis[route[-1], customer]
+				if temp <= customers[customer]['end']:
+					temp_time = max(temp, customers[customer]['start']) + customers[customer]['service']
+					temp_load = temp_load + customers[customer]['demand']
 					route.append(customer)
 					to_visit.remove(customer)
 				else:
-					if customer==customer_list[-1]:
-						route.append(customer_number+1)
+					if customer == customer_list[-1]:
+						route.append(customer_number + 1)
 						routes.append(route[:])
 						route = [0]
 						temp_load = 0
@@ -234,25 +248,23 @@ def initial_routes_generates(customers, capacity, customer_number, dis):
 					temp_load = 0
 					temp_time = 0
 
-
 		customer_list = to_visit[:]
 
-	if len(route)>1:
-		route.append(customer_number+1)
+	if len(route) > 1:
+		route.append(customer_number + 1)
 		routes.append(route)
 
 	return routes
 
 
-
 def main(customers, capacity, customer_number, dis):
-	generated_routes = initial_routes_generates(customers,capacity,customer_number,dis)
+	generated_routes = initial_routes_generates(customers, capacity, customer_number, dis)
 	rmp, routes = set_cover(customers, capacity, customer_number, dis)
 
 	for route in generated_routes:
 		fea, routes = path_eva_vrptw(route[1:], customers, capacity, dis, routes)
 		if not fea:
-			print('unfeasibile',route[1:])
+			print('unfeasibile', route[1:])
 			continue
 		temp_length = len(routes)
 		added_column = gp.Column(routes[temp_length]['column'], rmp.getConstrs())
@@ -270,19 +282,19 @@ def main(customers, capacity, customer_number, dis):
 	# obj,path = SPP.spp(dual, dis, customers, capacity, customer_number)
 
 	t0 = time.time()
-	obj,path = labeling_Algoithm_vrptw.labeling_algorithm(dual, dis, customers, capacity, customer_number)
-	print(time.time()-t0)
-	print(obj,path)
+	obj, path = labeling_Algoithm_vrptw.labeling_algorithm(dual, dis, customers, capacity, customer_number)
+	print(time.time() - t0)
+	print(obj, path)
 	t0 = time.time()
-	obj,path = labeling_approach.t(dual,dis,customers,capacity,customer_number)
+	obj, path = labeling_approach.t(dual, dis, customers, capacity, customer_number)
 	print(time.time() - t0)
 	print(obj, path)
 	while obj < 0:
-		fea,routes = path_eva_vrptw(path,customers,capacity,dis,routes)
+		fea, routes = path_eva_vrptw(path, customers, capacity, dis, routes)
 		if not fea:
 			print('broken')
 			exit()
-		print(obj,path)
+		print(obj, path)
 		sub_obj.append(obj)
 		if len(sub_obj) > 2:
 			if sub_obj[-1] == sub_obj[-2]:
@@ -292,14 +304,13 @@ def main(customers, capacity, customer_number, dis):
 
 		length = len(routes)
 
-
 		added_column = gp.Column(routes[length]['column'], rmp.getConstrs())
 
 		routes[length]['var'] = rmp.addVar(column=added_column, obj=routes[length]['distance'])
 		rmp.optimize()
 		dual = rmp.getAttr(GRB.Attr.Pi, rmp.getConstrs())
 		print([routes[i]['var'].x for i in range(1, len(routes) + 1)])
-		obj,path = labeling_Algoithm_vrptw.labeling_algorithm(dual, dis, customers, capacity, customer_number)
+		obj, path = labeling_Algoithm_vrptw.labeling_algorithm(dual, dis, customers, capacity, customer_number)
 
 	for key in routes.keys():
 		routes[key]['var'].vtype = GRB.BINARY
@@ -315,6 +326,10 @@ def main(customers, capacity, customer_number, dis):
 
 
 if __name__ == '__main__':
-	customers,capacity,customer_number = problem_csv(70)
+	customers, capacity, customer_number = problem_csv(20)
 	dis = dis_calcul(customers, customer_number)
+	pre_process(customers,customer_number,dis)
+
+	exit()
+
 	main(customers, capacity, customer_number, dis)
