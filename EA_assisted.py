@@ -35,8 +35,8 @@ class Individual(object):
 		self.customer_number = customer_number
 		self.x = np.zeros(customer_number+2,customer_number+2)
 		self.cost = None
-		self.pbest_x = self.x
-		self.pbest_cost = self.cost
+		self.pbest = None
+		self.gbest = None
 
 
 
@@ -50,13 +50,16 @@ class Evaluator(object):
 
 		self.customer_list = set(range(1,customer_number+2))
 
+		self.updated = [False]*(customer_number+2)
+
 	def evaluate(self, x):
 		# MCTS_decoder
 		root = Node(0,self.customers[0])
 
 		while True:
+			root.pre_sample(self.customer_list,x,self.customers)
 
-			root.select()
+
 
 
 
@@ -78,10 +81,25 @@ class Node(object):
 		self.max_reward = 0
 		self.min_reward = 0
 
-	def pre_sample(self,customer_list,matrix):
+		self.score = 1e6
+
+
+	def pre_sample(self,customer_list,matrix,customers):
 		temp_reachable = list(customer_list-self.tabu)
-		if len(self.reachable)<self.max_children:
-			return set(temp_reachable)
+		if len(temp_reachable)>self.max_children:
+			p = softmax(matrix[self.current,temp_reachable])
+			reachable = np.random.choice(temp_reachable,size = self.max_children,replace=False,p=p)
+		else:
+			reachable = temp_reachable
+
+
+
+		for target in reachable:
+			temp_node = Node(target,customers[target])
+			temp_node.father = self
+			temp_node.tabu.update(self.tabu)
+			temp_node.rollout()
+			self.children.append(temp_node)
 
 
 
@@ -99,14 +117,16 @@ class Node(object):
 		pass
 
 	def iteration(self):
-		self.select()
-		self.expand()
+		pass
 
 
 
 
 
 
+
+def softmax(x):
+	return np.exp(x)/np.sum(np.exp(x),axis=0)
 
 
 if __name__ == '__main__':
