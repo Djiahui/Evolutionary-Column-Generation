@@ -10,6 +10,7 @@ import pickle
 import pandas as pd
 import labeling_approach
 import copy
+import EA_assisted
 
 def problem_csv(num):
 	flag = False
@@ -282,6 +283,7 @@ def main(customers, capacity, customer_number, dis):
 	# obj,path = SPP.spp(dual, dis, customers, capacity, customer_number)
 
 	t0 = time.time()
+	EA_assisted.t(dual, dis, customers, capacity, customer_number)
 	obj, path = labeling_Algoithm_vrptw.labeling_algorithm(dual, dis, customers, capacity, customer_number)
 	print(time.time() - t0)
 	print(obj, path)
@@ -329,7 +331,4 @@ if __name__ == '__main__':
 	customers, capacity, customer_number = problem_csv(20)
 	dis = dis_calcul(customers, customer_number)
 	pre_process(customers,customer_number,dis)
-
-	exit()
-
 	main(customers, capacity, customer_number, dis)
