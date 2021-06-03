@@ -60,7 +60,7 @@ class Evaluator(object):
 		root = Node(0,self.customers)
 
 		root.path.append(0)
-		root.pi = self.pi
+		root.dual= self.pi
 		root.dis = self.dis
 
 		for _ in range(self.iteration):
@@ -113,19 +113,19 @@ class Node(object):
 		new_child.tabu.update(self.tabu)
 		new_child.path = self.path+[reachable]
 		new_child.current_dis = self.dis[self.current,reachable]+self.current_dis-self.dual[self.current]
-		new_child.current_time = self.current_time+self.dis[self.current,reachable]
+		new_child.current_time = self.current_time+self.dis[self.current,reachable]+self.customers[new_child.current]['service']
+
+		self.children.append(new_child)
 
 
 		if new_child.current == len(self.customers)-1:
-			new_child.quality = new_child.dis
+			new_child.quality = new_child.current_dis
 			new_child.best_quality_route = new_child.path
 			new_child.state = 'terminal'
 			new_child.backup()
 		else:
-			new_child.rollout()
+			new_child.rollout(matrix,customer_list)
 
-
-		return new_child
 
 	def select(self, customer_list, matrix):
 		if len(self.children) < self.max_children and len(customer_list - self.tabu - self.selected) > 0:
@@ -138,8 +138,6 @@ class Node(object):
 				self.children[selected_index].select()
 
 
-
-
 	def backup(self):
 		cur = self
 		while cur.father:
@@ -150,14 +148,32 @@ class Node(object):
 
 			if cur.quality < cur.father.quality:
 				cur.father.quality = cur.quality
-				cur.father.quality.best_quality_route = cur.best_quality_route
+				cur.father.best_quality_route = cur.best_quality_route
 
-	def rollout(self):
+			cur = cur.father
+
+	def rollout(self,matrix,customer_list):
 		## generate a route
-		dis = np.random.uniform(-100,-50)
-		self.quality = dis
+		rollout_set = set()
+		rollout_path = self.path[:]
+		current_customer = self.current
+
+		rollout_dis = self.current_dis
+		rollout_time = self.current_time
+		while current_customer!=len(self.customers)-1:
+			candidates = list(customer_list-self.customers[current_customer]['tabu']-rollout_set)
+			next_customer = list(candidates)[np.argmax(matrix[current_customer,candidates])]
+			rollout_path.append(next_customer)
+			rollout_set.add(next_customer)
+
+			rollout_dis += self.dis[current_customer,next_customer]-self.dual[current_customer]
+			rollout_time += self.dis[current_customer,next_customer]+self.customers[current_customer]['service']
+
+			current_customer = next_customer
+
+		self.quality = rollout_dis
 		self.visited_times += 1
-		self.best_quality_route = [1,2,3,4,5,21,99]
+		self.best_quality_route = rollout_path[:]
 		self.backup()
 
 	def iteration(self):
@@ -174,10 +190,10 @@ class Node(object):
 
 def t(dual, dis, customers, capacity, customer_number):
 	eva = Evaluator(dis,customers,capacity,customer_number)
-	print(id(customers))
 	eva.pi = [0]+dual+[0]
 	pop = Individual(customer_number)
 	eva.evaluate(pop)
 	exit()
+
 if __name__ == '__main__':
 	pass
