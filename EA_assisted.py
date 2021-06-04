@@ -39,6 +39,8 @@ class Individual(object):
 		self.pbest = None
 		self.gbest = None
 
+		self.customer_list = set(range(1, customer_number + 2))
+
 
 class Evaluator(object):
 	def __init__(self, dis, customers, capacity, customer_number):
@@ -62,9 +64,10 @@ class Evaluator(object):
 		root.path.append(0)
 		root.dual= self.pi
 		root.dis = self.dis
+		root.pop = pop
 
 		for _ in range(self.iteration):
-			root.select(self.customer_list,pop.x)
+			root.select()
 
 
 
@@ -80,6 +83,7 @@ class Node(object):
 		self.dual = None
 		self.tabu = self.customers[index]['tabu']
 		self.selected = set()
+		self.pop = None
 
 		self.children = []
 		self.father = None
@@ -97,10 +101,10 @@ class Node(object):
 		self.path = []
 		self.best_quality_route = None
 
-	def expand(self,customer_list,matrix):
-		temp_reachable = list(customer_list-self.tabu-self.selected)
+	def expand(self):
+		temp_reachable = list(self.pop.customer_list-self.tabu-self.selected)
 		#Todo the evolutionary process of particle is need to be added in this function
-		p = self.softmax(matrix[self.current, temp_reachable])
+		p = self.softmax(self.pop.x[self.current, temp_reachable])
 		reachable = int(np.random.choice(temp_reachable, size=1, replace=False, p=p)[-1])
 		self.selected.add(reachable)
 
@@ -109,6 +113,7 @@ class Node(object):
 		new_child.father = self
 		new_child.dual = self.dual
 		new_child.dis = self.dis
+		new_child.pop = self.pop
 
 		new_child.tabu.update(self.tabu)
 		new_child.path = self.path+[reachable]
@@ -124,14 +129,14 @@ class Node(object):
 			new_child.state = 'terminal'
 			new_child.backup()
 		else:
-			new_child.rollout(matrix,customer_list)
+			new_child.rollout()
 
 
-	def select(self, customer_list, matrix):
-		if len(self.children) < self.max_children and len(customer_list - self.tabu - self.selected) > 0:
-			self.expand(customer_list,matrix)
+	def select(self):
+		if len(self.children) < self.max_children and len(self.pop.customer_list - self.tabu - self.selected) > 0:
+			self.expand()
 		else:
-			selected_index = np.argmax(map(lambda x: x.real_score(matrix), self.children))
+			selected_index = np.argmax(list(map(lambda x: x.real_score(), self.children)))
 			if self.children[selected_index].state=='terminal':
 				self.children[selected_index].backup()
 			else:
@@ -152,7 +157,7 @@ class Node(object):
 
 			cur = cur.father
 
-	def rollout(self,matrix,customer_list):
+	def rollout(self):
 		## generate a route
 		rollout_set = set()
 		rollout_path = self.path[:]
@@ -161,8 +166,8 @@ class Node(object):
 		rollout_dis = self.current_dis
 		rollout_time = self.current_time
 		while current_customer!=len(self.customers)-1:
-			candidates = list(customer_list-self.customers[current_customer]['tabu']-rollout_set)
-			next_customer = list(candidates)[np.argmax(matrix[current_customer,candidates])]
+			candidates = list(self.pop.customer_list-self.customers[current_customer]['tabu']-rollout_set)
+			next_customer = list(candidates)[np.argmax(self.pop.x[current_customer,candidates])]
 			rollout_path.append(next_customer)
 			rollout_set.add(next_customer)
 
@@ -179,9 +184,9 @@ class Node(object):
 	def iteration(self):
 		pass
 
-	def real_score(self, matrix):
+	def real_score(self):
 
-		return (self.quality - self.father.min_quality) / (self.father.max_quality - self.father.min_quality) + matrix[
+		return (self.quality - self.father.min_quality) / (self.father.max_quality - self.father.min_quality) + self.pop.x[
 			self.father.current, self.current] + self.c * math.sqrt((math.log(self.father.visited_times)/self.visited_times))
 
 
