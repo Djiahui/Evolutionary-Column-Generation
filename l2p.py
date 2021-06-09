@@ -48,7 +48,7 @@ def pre_process(customers, customer_number,dis):
 			return
 		for target in range(1, customer_number + 2):
 			if customer['start']+customer['service']+dis[start,target]>customers[target]['end']:
-				print(customer['start'],customer['service'],dis[start,target],customer['start']+customer['service']+dis[start,target],customers[target]['end'])
+				# print(customer['start'],customer['service'],dis[start,target],customer['start']+customer['service']+dis[start,target],customers[target]['end'])
 				customer['tabu'].add(target)
 
 
@@ -274,6 +274,7 @@ def main(customers, capacity, customer_number, dis):
 	# rmp, routes = history_routes_load(rmp, routes)
 	print(len(routes))
 	rmp.optimize()
+	print(rmp.objval)
 
 	dual = rmp.getAttr(GRB.Attr.Pi, rmp.getConstrs())
 
@@ -282,21 +283,14 @@ def main(customers, capacity, customer_number, dis):
 	# obj,path = SPP.price_problem(dual, dis, customers, capacity, customer_number)
 	# obj,path = SPP.spp(dual, dis, customers, capacity, customer_number)
 
-	t0 = time.time()
-	EA_assisted.t(dual, dis, customers, capacity, customer_number)
+	# EA_assisted.t(dual, dis, customers, capacity, customer_number)
 	obj, path = labeling_Algoithm_vrptw.labeling_algorithm(dual, dis, customers, capacity, customer_number)
-	print(time.time() - t0)
-	print(obj, path)
-	t0 = time.time()
-	obj, path = labeling_approach.t(dual, dis, customers, capacity, customer_number)
-	print(time.time() - t0)
-	print(obj, path)
-	while obj < 0:
+	while obj < 1e-6:
 		fea, routes = path_eva_vrptw(path, customers, capacity, dis, routes)
 		if not fea:
 			print('broken')
 			exit()
-		print(obj, path)
+		# print(obj, path)
 		sub_obj.append(obj)
 		if len(sub_obj) > 2:
 			if sub_obj[-1] == sub_obj[-2]:
@@ -310,8 +304,10 @@ def main(customers, capacity, customer_number, dis):
 
 		routes[length]['var'] = rmp.addVar(column=added_column, obj=routes[length]['distance'])
 		rmp.optimize()
+		print(rmp.objval)
+
 		dual = rmp.getAttr(GRB.Attr.Pi, rmp.getConstrs())
-		print([routes[i]['var'].x for i in range(1, len(routes) + 1)])
+		# print([routes[i]['var'].x for i in range(1, len(routes) + 1)])
 		obj, path = labeling_Algoithm_vrptw.labeling_algorithm(dual, dis, customers, capacity, customer_number)
 
 	for key in routes.keys():
@@ -328,7 +324,7 @@ def main(customers, capacity, customer_number, dis):
 
 
 if __name__ == '__main__':
-	customers, capacity, customer_number = problem_csv(20)
+	customers, capacity, customer_number = problem_csv(100)
 	dis = dis_calcul(customers, customer_number)
 	pre_process(customers,customer_number,dis)
 	main(customers, capacity, customer_number, dis)
