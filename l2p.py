@@ -16,7 +16,7 @@ def problem_csv(num):
 	flag = False
 	customers = {}
 
-	with open('data/C101_200.csv') as p:
+	with open('data/R101_200.csv') as p:
 		for line in p:
 			if not flag:
 				flag = True
