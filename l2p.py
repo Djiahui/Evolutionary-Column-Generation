@@ -283,7 +283,7 @@ def main(customers, capacity, customer_number, dis):
 	# obj,path = SPP.price_problem(dual, dis, customers, capacity, customer_number)
 	# obj,path = SPP.spp(dual, dis, customers, capacity, customer_number)
 
-	# EA_assisted.t(dual, dis, customers, capacity, customer_number)
+	EA_assisted.t(dual, dis, customers, capacity, customer_number)
 	obj, path = labeling_Algoithm_vrptw.labeling_algorithm(dual, dis, customers, capacity, customer_number)
 	while obj < 1e-6:
 		fea, routes = path_eva_vrptw(path, customers, capacity, dis, routes)
