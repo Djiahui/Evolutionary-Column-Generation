@@ -106,4 +106,4 @@ def labeling_algorithm(pi, dis, customers, capacity, customer_number):
             best_label = label
 
 
-    return best_label.dis, best_label.path[1:]
+    return [best_label.dis], [best_label.path[1:]]

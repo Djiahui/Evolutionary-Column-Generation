@@ -1,57 +1,189 @@
 import gurobipy as gp
 from gurobipy import GRB
-import numpy as np
+
 import math
 import matplotlib.pyplot as plt
-import time
-import SPP
+
 import labeling_Algoithm_vrptw
 import pickle
-import pandas as pd
-import labeling_approach
+
 import copy
 import EA_assisted
 
-def problem_csv(num):
-	flag = False
-	customers = {}
+class Solver(object):
+	def __init__(self,path,num):
+		self.customers = {}
+		self.num = num
+		self.path = path
+		self.dis = {}
+		self.routes = {}
+		self.rmp = None
 
-	with open('data/R101_200.csv') as p:
-		for line in p:
-			if not flag:
-				flag = True
-				pass
-
-			else:
-				temp = line.split(',')
-				length = len(customers)
-				customers[length] = {}
-				customers[length]['loc'] = [float(temp[1]), float(temp[2])]
-				customers[length]['demand'] = int(float(temp[3]))
-				customers[length]['start'] = int(float(temp[4]))
-				customers[length]['end'] = int(float(temp[5]))
-				customers[length]['service'] = int(float(temp[6]))
-
-				if length == num:
-					length = len(customers)
-					customers[length] = copy.deepcopy(customers[0])
-					break
-
-	return customers, 200, num
+		self.capacity = int(path.split('.')[0].split('_')[-1])
 
 
-def pre_process(customers, customer_number,dis):
-	for start, customer in customers.items():
-		customer['tabu'] = set()
-		if start==customer_number+1:
-			a = 0
-			return
-		for target in range(1, customer_number + 2):
-			if customer['start']+customer['service']+dis[start,target]>customers[target]['end']:
-				# print(customer['start'],customer['service'],dis[start,target],customer['start']+customer['service']+dis[start,target],customers[target]['end'])
-				customer['tabu'].add(target)
 
 
+	def problem_csv(self):
+		flag = False
+
+		with open(self.path) as p:
+			for line in p:
+				if not flag:
+					flag = True
+					pass
+
+				else:
+					temp = line.split(',')
+					length = len(self.customers)
+					self.customers[length] = {}
+					self.customers[length]['loc'] = [float(temp[1]), float(temp[2])]
+					self.customers[length]['demand'] = int(float(temp[3]))
+					self.customers[length]['start'] = int(float(temp[4]))
+					self.customers[length]['end'] = int(float(temp[5]))
+					self.customers[length]['service'] = int(float(temp[6]))
+
+					if length == self.num:
+						length = len(self.customers)
+						self.customers[length] = copy.deepcopy(self.customers[0])
+						break
+
+	def dis_calcul(self):
+		for i in range(self.num + 2):
+			for j in range(self.num + 2):
+				if i == j:
+					self.dis[(i, j)] = 0
+					continue
+				if i == 0 and j == self.num + 1:
+					self.dis[(i, j)] = 0
+				if i == self.num + 1 and j == 0:
+					self.dis[(i, j)] = 0
+				temp = [self.customers[i]['loc'][0] - self.customers[j]['loc'][0],
+						self.customers[i]['loc'][1] - self.customers[j]['loc'][1]]
+				self.dis[(i, j)] = round(math.sqrt(temp[0] * temp[0] + temp[1] * temp[1]), 2)
+
+	def pre_press(self):
+		self.dis_calcul()
+		for start, customer in self.customers.items():
+			customer['tabu'] = set()
+			if start == self.num + 1:
+				a = 0
+				return
+			for target in range(1, self.num + 2):
+				if customer['start'] + customer['service'] + self.dis[start, target] > self.customers[target]['end']:
+					# print(customer['start'],customer['service'],dis[start,target],customer['start']+customer['service']+dis[start,target],customers[target]['end'])
+					customer['tabu'].add(target)
+
+	def set_cover(self):
+		self.rmp = gp.Model('rmp')
+		self.rmp.Params.logtoconsole = 0
+
+		for i in range(self.num):
+			index = i + 1
+			fea = self.path_eva_vrptw([index, self.num + 1])
+			if not fea:
+				print('unfeasible', [index, self.num])
+			self.routes[index]['var'] = self.rmp.addVar(ub=1, lb=0, obj=self.routes[index]['distance'], name='x')
+
+		cons = self.rmp.addConstrs(self.routes[index]['var'] == 1 for index in range(1, self.num + 1))
+
+		self.rmp.update()
+
+	def path_eva_vrptw(self,path):
+		cost = 0
+		pre = 0
+		load = 0
+		time = 0
+		fea = True
+
+		for cus in path:
+			cost = cost + self.dis[pre, cus]
+			time = time + self.dis[pre, cus]
+			load = load + self.customers[cus]['demand']
+
+			if cus == path[-1]:
+				continue
+
+			if time > self.customers[cus]['end']:
+				fea = False
+				return fea
+			if load > self.capacity:
+				fea = False
+				return fea
+			time = max(time, self.customers[cus]['start']) + self.customers[cus]['service']
+			pre = cus
+
+		if fea:
+			column = [1 if i in path else 0 for i in range(1, len(self.customers) - 1)]
+			n = len(self.routes) + 1
+			self.routes[n] = {}
+			self.routes[n]['demand'] = load
+			self.routes[n]['distance'] = cost
+			self.routes[n]['column'] = column
+			self.routes[n]['route'] = path
+
+		return fea
+
+	def initial_routes_generates(self):
+		customer_list = [i for i in range(1, self.num + 1)]
+		to_visit = customer_list[:]
+		routes = []
+		route = [0]
+		temp_load = 0
+		temp_time = 0
+
+		while customer_list:
+			for customer in customer_list:
+				if self.customers[customer]['demand'] + temp_load < self.capacity:
+					temp = temp_time + self.dis[route[-1], customer]
+					if temp <= self.customers[customer]['end']:
+						temp_time = max(temp, self.customers[customer]['start']) + self.customers[customer]['service']
+						temp_load = temp_load + self.customers[customer]['demand']
+						route.append(customer)
+						to_visit.remove(customer)
+					else:
+						if customer == customer_list[-1]:
+							route.append(self.num + 1)
+							routes.append(route[:])
+							route = [0]
+							temp_load = 0
+							temp_time = 0
+				else:
+					if customer == customer_list[-1]:
+						route.append(self.num + 1)
+						routes.append(route[:])
+						route = [0]
+						temp_load = 0
+						temp_time = 0
+
+			customer_list = to_visit[:]
+
+		if len(route) > 1:
+			route.append(self.num + 1)
+			routes.append(route)
+
+		self.add_column(routes)
+
+	def start(self):
+		self.problem_csv()
+		self.pre_press()
+		self.set_cover()
+		self.initial_routes_generates()
+
+	def step(self):
+		self.rmp.optimize()
+		dual = self.rmp.getAttr(GRB.Attr.Pi, self.rmp.getConstrs())
+		return dual
+
+	def add_column(self,routes):
+		for route in routes:
+			fea = self.path_eva_vrptw(route)
+			if not fea:
+				print('unfeasibile', route[1:])
+				continue
+			temp_length = len(self.routes)
+			added_column = gp.Column(self.routes[temp_length]['column'], self.rmp.getConstrs())
+			self.routes[temp_length]['var'] = self.rmp.addVar(column=added_column, obj=self.routes[temp_length]['distance'])
 
 
 def problem_read(path):
@@ -89,60 +221,7 @@ def problem_read(path):
 	return customers, capacity, customer_number, best_know
 
 
-def dis_calcul(customers, number):
-	dis = {}
-	graph = []
-	for i in range(number + 2):
-		for j in range(number + 2):
-			if i == j:
-				dis[(i,j)] = 0
-				continue
-			if i == 0 and j == number + 1:
-				dis[(i, j)] = 0
-			if i == number + 1 and j == 0:
-				dis[(i, j)] = 0
-			temp = [customers[i]['loc'][0] - customers[j]['loc'][0], customers[i]['loc'][1] - customers[j]['loc'][1]]
-			dis[(i, j)] = round(math.sqrt(temp[0] * temp[0] + temp[1] * temp[1]), 2)
-	return dis
 
-
-def path_eva(path, customers, dis, routes):
-	total_demand = 0
-	distance = 0
-	pre = 0
-	for customer in path:
-		distance += dis[(pre, customer)]
-		pre = customer
-		total_demand += customers[customer]['demand']
-
-	column = [1 if i in path else 0 for i in range(1, len(customers) - 1)]
-
-	n = len(routes) + 1
-	routes[n] = {}
-	routes[n]['demand'] = total_demand
-	routes[n]['distance'] = distance
-	routes[n]['column'] = column
-	routes[n]['route'] = path
-
-	return column, total_demand, distance, routes
-
-
-def set_cover(customers, capacity, number, dis):
-	rmp = gp.Model('rmp')
-	rmp.Params.logtoconsole = 0
-	routes = {}
-	for i in range(number):
-		index = i + 1
-		fea, routes = path_eva_vrptw([index, customer_number + 1], customers, capacity, dis, routes)
-		if not fea:
-			print('unfeasible', [index, customer_number])
-		routes[index]['var'] = rmp.addVar(ub=1, lb=0, obj=routes[index]['distance'], name='x')
-
-	cons = rmp.addConstrs(routes[index]['var'] == 1 for index in range(1, number + 1))
-
-	rmp.update()
-
-	return rmp, routes
 
 
 def history_routes_load(rmp, routes):
@@ -181,150 +260,43 @@ def plot(path, customers):
 	plt.show()
 
 
-def path_eva_vrptw(path, customers, capacity, dis, routes):
-	cost = 0
-	pre = 0
-	load = 0
-	time = 0
-	fea = True
-
-	for cus in path:
-		cost = cost + dis[pre, cus]
-		time = time + dis[pre, cus]
-		load = load + customers[cus]['demand']
-
-		if cus == path[-1]:
-			continue
-
-		if time > customers[cus]['end']:
-			fea = False
-			return fea, routes
-		if load > capacity:
-			fea = False
-			return fea, routes
-		time = max(time, customers[cus]['start']) + customers[cus]['service']
-		pre = cus
-
-	if fea:
-		column = [1 if i in path else 0 for i in range(1, len(customers) - 1)]
-		n = len(routes) + 1
-		routes[n] = {}
-		routes[n]['demand'] = load
-		routes[n]['distance'] = cost
-		routes[n]['column'] = column
-		routes[n]['route'] = path
-
-	return fea, routes
 
 
-def initial_routes_generates(customers, capacity, customer_number, dis):
-	customer_list = [i for i in range(1, customer_number + 1)]
-	to_visit = customer_list[:]
-	routes = []
-	route = [0]
-	temp_load = 0
-	temp_time = 0
-
-	while customer_list:
-		for customer in customer_list:
-			if customers[customer]['demand'] + temp_load < capacity:
-				temp = temp_time + dis[route[-1], customer]
-				if temp <= customers[customer]['end']:
-					temp_time = max(temp, customers[customer]['start']) + customers[customer]['service']
-					temp_load = temp_load + customers[customer]['demand']
-					route.append(customer)
-					to_visit.remove(customer)
-				else:
-					if customer == customer_list[-1]:
-						route.append(customer_number + 1)
-						routes.append(route[:])
-						route = [0]
-						temp_load = 0
-						temp_time = 0
-			else:
-				if customer == customer_list[-1]:
-					route.append(customer_number + 1)
-					routes.append(route[:])
-					route = [0]
-					temp_load = 0
-					temp_time = 0
-
-		customer_list = to_visit[:]
-
-	if len(route) > 1:
-		route.append(customer_number + 1)
-		routes.append(route)
-
-	return routes
 
 
-def main(customers, capacity, customer_number, dis):
-	generated_routes = initial_routes_generates(customers, capacity, customer_number, dis)
-	rmp, routes = set_cover(customers, capacity, customer_number, dis)
 
-	for route in generated_routes:
-		fea, routes = path_eva_vrptw(route[1:], customers, capacity, dis, routes)
-		if not fea:
-			print('unfeasibile', route[1:])
-			continue
-		temp_length = len(routes)
-		added_column = gp.Column(routes[temp_length]['column'], rmp.getConstrs())
-		routes[temp_length]['var'] = rmp.addVar(column=added_column, obj=routes[temp_length]['distance'])
 
-	# rmp, routes = history_routes_load(rmp, routes)
-	print(len(routes))
-	rmp.optimize()
-	print(rmp.objval)
+def main(path,num):
+	solver = Solver(path,num)
+	solver.start()
+	dual = solver.step()
 
-	dual = rmp.getAttr(GRB.Attr.Pi, rmp.getConstrs())
 
-	sub_obj = []
+	# EA_assisted.t(dual, solver.dis, solver.customers, solver.capacity, solver.num)
+	objs, paths = labeling_Algoithm_vrptw.labeling_algorithm(dual, solver.dis, solver.customers, solver.capacity, solver.num)
+	while objs[0] < -(1e-1):
+		solver.add_column(paths)
+		dual = solver.step()
+		objs, paths = labeling_Algoithm_vrptw.labeling_algorithm(dual, solver.dis, solver.customers, solver.capacity, solver.num)
+		print(objs[0])
 
-	# obj,path = SPP.price_problem(dual, dis, customers, capacity, customer_number)
-	# obj,path = SPP.spp(dual, dis, customers, capacity, customer_number)
 
-	EA_assisted.t(dual, dis, customers, capacity, customer_number)
-	obj, path = labeling_Algoithm_vrptw.labeling_algorithm(dual, dis, customers, capacity, customer_number)
-	while obj < 1e-6:
-		fea, routes = path_eva_vrptw(path, customers, capacity, dis, routes)
-		if not fea:
-			print('broken')
-			exit()
-		# print(obj, path)
-		sub_obj.append(obj)
-		if len(sub_obj) > 2:
-			if sub_obj[-1] == sub_obj[-2]:
-				print('strange')
-				del routes[len(routes)]
-				break
-
-		length = len(routes)
-
-		added_column = gp.Column(routes[length]['column'], rmp.getConstrs())
-
-		routes[length]['var'] = rmp.addVar(column=added_column, obj=routes[length]['distance'])
-		rmp.optimize()
-		print(rmp.objval)
-
-		dual = rmp.getAttr(GRB.Attr.Pi, rmp.getConstrs())
-		# print([routes[i]['var'].x for i in range(1, len(routes) + 1)])
-		obj, path = labeling_Algoithm_vrptw.labeling_algorithm(dual, dis, customers, capacity, customer_number)
-
-	for key in routes.keys():
-		routes[key]['var'].vtype = GRB.BINARY
-	for con in rmp.getConstrs():
+	for key in solver.routes.keys():
+		solver.routes[key]['var'].vtype = GRB.BINARY
+	for con in solver.rmp.getConstrs():
 		con.sense = '='
 
-	rmp.update()
-	rmp.optimize()
-	for key in routes.keys():
-		if routes[key]['var'].x > 0:
-			print(routes[key]['route'])
-	print(rmp.objval)
+	solver.rmp.update()
+	solver.rmp.optimize()
+	temp = []
+	for key in solver.routes.keys():
+		if solver.routes[key]['var'].x > 0:
+			print(solver.routes[key]['route'])
+			temp += solver.routes[key]['route'][:-1]
+	temp.sort()
+	print(temp)
+	print(solver.rmp.objval)
 
 
 if __name__ == '__main__':
-	customers, capacity, customer_number = problem_csv(100)
-	dis = dis_calcul(customers, customer_number)
-	pre_process(customers,customer_number,dis)
-	main(customers, capacity, customer_number, dis)
+	main('data/R101_200.csv',50)
