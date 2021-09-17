@@ -7,15 +7,19 @@ import math
 class Population(object):
 	def __init__(self, size, customers,dis,capacity,customer_number,dual):
 		self.size = size
+		self.max_iter = 5
 		self.customer_number = customer_number
-		self.population = []
+		self.pops = []
 		self.eva = Evaluator(dis,customers,capacity,customer_number)
 		self.customers = customers
 		self.global_best = None
 
-		self.dual = dual
-		self.eva.dual = dual
+		self.dual = [0]+dual+[0]
+		self.eva.dual = [0]+dual+[0]
 
+	def gbest_update(self,pop):
+		pop.gbest = self.global_best
+		return pop
 
 	def pop_generate(self):
 		# random_generate
@@ -24,17 +28,33 @@ class Population(object):
 
 		for i in range(self.size):
 			temp = Individual(self.customer_number)
-			temp.cost = self.eva.evaluate(temp)
-			temp.pbest_cost = temp.cost
-			temp.gbest = self.global_best
-
+			self.eva.evaluate(temp)
+			temp.p_best = copy.deepcopy(temp)
 			if temp.cost < temp_best_cost:
 				self.global_best = copy.deepcopy(temp)
 				temp_best_cost = temp.cost
 
+			self.pops.append(temp)
+
+		self.pops = list(map(lambda x:self.gbest_update(x),self.pops))
+
+
+	def evolution(self,dual):
+
+		self.update(dual)
+		for _ in range(self.max_iter):
+			self.iteration()
+
 	def update(self,dual):
-		self.dual = dual
-		self.eva.dual = dual
+		self.dual = [0]+dual+[0]
+		self.eva.dual = [0]+dual+[0]
+
+	def iteration(self):
+		for pop in self.pops:
+			self.eva.evaluate(pop)
+
+			pass
+
 
 
 
@@ -46,7 +66,10 @@ class Individual(object):
 		self.x = np.random.rand(customer_number + 2, customer_number + 2)
 		self.velocity = np.random.rand(customer_number + 2, customer_number + 2)
 		self.cost = None
+		self.path = None
+
 		self.pbest = None
+
 		self.gbest = None
 
 		self.customer_list = set(range(1, customer_number + 2))
@@ -84,6 +107,9 @@ class Evaluator(object):
 
 		for _ in range(self.iteration):
 			root.select()
+		pop.cost = root.quality
+		pop.path = root.best_quality_route[:]
+
 		pop.query = [False]*(pop.customer_number+1)
 
 
@@ -108,7 +134,7 @@ class Node(object):
 
 		self.state = None
 
-		self.quality = 0
+		self.quality = 1e6
 		self.max_quality = -1e6
 		self.min_quality = 1e6
 		self.visited_times = 0
@@ -146,6 +172,7 @@ class Node(object):
 			new_child.quality = new_child.current_dis
 			new_child.best_quality_route = new_child.path
 			new_child.state = 'terminal'
+			new_child.visited_times += 1
 			new_child.backup()
 		else:
 			new_child.rollout()
@@ -164,6 +191,7 @@ class Node(object):
 	def backup(self):
 		cur = self
 		while cur.father:
+			#Todo there is a problem, the min/max quality
 			cur.father.min_quality = min(cur.father.min_quality, cur.quality)
 			cur.father.max_quality = max(cur.father.max_quality, cur.quality)
 
@@ -204,11 +232,11 @@ class Node(object):
 		pass
 
 	def get_score(self):
+		if not self.visited_times:
+			a = 0
 
 		return (self.quality - self.father.min_quality) / (self.father.max_quality - self.father.min_quality) + \
-			   self.pop.x[
-				   self.father.current, self.current] + self.c * math.sqrt(
-			(math.log(self.father.visited_times) / self.visited_times))
+			   self.pop.x[self.father.current, self.current] + self.c * math.sqrt((math.log(self.father.visited_times) / self.visited_times))
 
 	def softmax(self, x):
 		return np.exp(x) / np.sum(np.exp(x), axis=0)
