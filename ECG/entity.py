@@ -2,13 +2,6 @@ import gurobipy as gp
 from gurobipy import GRB
 
 import math
-import matplotlib.pyplot as plt
-
-import labeling_Algoithm_vrptw
-import pickle
-
-import copy
-import EA_assisted
 
 class Solver(object):
 	def __init__(self,path,num):
@@ -185,118 +178,6 @@ class Solver(object):
 			added_column = gp.Column(self.routes[temp_length]['column'], self.rmp.getConstrs())
 			self.routes[temp_length]['var'] = self.rmp.addVar(column=added_column, obj=self.routes[temp_length]['distance'])
 
-
-def problem_read(path):
-	customers = {}
-	customer_number = 0
-	capacity = 0
-	best_know = 100000
-
-	for line in open(path):
-		temp = line.split(' ')
-		if len(temp) == 2:
-			if not customer_number:
-
-				customer_number = int(temp[0])
-				best_know = float(temp[1])
-			else:
-				customers[0] = {}
-				customers[0]['loc'] = [float(temp[0]), float(temp[1])]
-				customers[0]['demand'] = 0
-		elif len(temp) == 1:
-			capacity = int(temp[0])
-
-		elif len(temp) == 4:
-			l = len(customers)
-			customers[l] = {}
-			customers[l]['loc'] = [float(temp[1]), float(temp[2])]
-			customers[l]['demand'] = int(temp[3])
-
-	# virtual depot for return
-	l = len(customers)
-	customers[l] = {}
-	customers[l]['loc'] = customers[0]['loc']
-	customers[l]['demand'] = customers[0]['demand']
-
-	return customers, capacity, customer_number, best_know
-
-
-
-
-
-def history_routes_load(rmp, routes):
-	# hwo to store the route generated
-	with open('problem1_route.pkl', 'rb') as pkl2:
-		new_routes = pickle.load(pkl2)
-
-	n = len(new_routes)
-
-	for i in range(51, n):
-		v = new_routes[i]
-		m = len(routes) + 1
-		routes[m] = {}
-
-		routes[m]['demand'] = v['demand']
-		routes[m]['column'] = v['column']
-		routes[m]['distance'] = v['distance']
-		routes[m]['route'] = v['route']
-
-		added_column = gp.Column(routes[m]['column'], rmp.getConstrs())
-
-		routes[m]['var'] = rmp.addVar(column=added_column, obj=routes[m]['distance'])
-
-	rmp.update()
-
-	return rmp, routes
-
-
-def plot(path, customers):
-	pre = 0
-	for cus in path:
-		plt.plot((customers[pre]['loc'][0], customers[cus]['loc'][0]),
-				 (customers[pre]['loc'][1], customers[cus]['loc'][1]))
-		plt.text(customers[pre]['loc'][0], customers[pre]['loc'][1], str(pre), verticalalignment='bottom')
-		pre = cus
-	plt.show()
-
-
-
-
-
-
-
-
-def main(path,num):
-	solver = Solver(path,num)
-	solver.start()
-	dual = solver.step()
-
-
-	# EA_assisted.t(dual, solver.dis, solver.customers, solver.capacity, solver.num)
-	objs, paths = labeling_Algoithm_vrptw.labeling_algorithm(dual, solver.dis, solver.customers, solver.capacity, solver.num)
-	while objs[0] < -(1e-1):
-		solver.add_column(paths)
-		dual = solver.step()
-		objs, paths = labeling_Algoithm_vrptw.labeling_algorithm(dual, solver.dis, solver.customers, solver.capacity, solver.num)
-		print(objs[0])
-
-
-	for key in solver.routes.keys():
-		solver.routes[key]['var'].vtype = GRB.BINARY
-	for con in solver.rmp.getConstrs():
-		con.sense = '='
-
-	solver.rmp.update()
-	solver.rmp.optimize()
-	temp = []
-	for key in solver.routes.keys():
-		if solver.routes[key]['var'].x > 0:
-			print(solver.routes[key]['route'])
-			temp += solver.routes[key]['route'][:-1]
-	temp.sort()
-	print(temp)
-	print(solver.rmp.objval)
-
-
-if __name__ == '__main__':
-	main('data/R101_200.csv',100)
+class Individual(object):
+	def __init__(self):
+		pass

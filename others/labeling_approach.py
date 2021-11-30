@@ -265,4 +265,3 @@ def t(pi, dis, customers, capacity, customer_number):
 
 
 
-

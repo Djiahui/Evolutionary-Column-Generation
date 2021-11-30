@@ -88,6 +88,7 @@ def labeling_algorithm(pi, dis, customers, capacity, customer_number):
                 path_dic[customer_number+1].append(new_label)
                 continue
             else:
+                # the set of un_reachable_cus for current label is varying during the last iteration.
                 new_label.unreachable_cus.update(current.unreachable_cus)
                 if new_label.path[-1] in path_dic:
                     path_dic[new_label.path[-1]] = dominate(new_label,path_dic[new_label.path[-1]])
