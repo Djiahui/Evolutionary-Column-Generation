@@ -5,15 +5,98 @@ import math
 import copy
 import numpy as np
 
+
 # 0 is not appear in path
 class Individual(object):
-	def __init__(self):
-		pass
+	def __init__(self,path,dis):
+		self.path = path
+		self.dis = dis
+
+		self.cost = 0
+
+	def evaluate_under_dual(self,dual):
+		for customer in self.path[:-1]:
+			self.cost += dual[customer]
+
+		self.cost += self.dis
+
 
 
 class Population(object):
-	def __init__(self, num):
-		pass
+	def __init__(self,customer_num,customers,dis,capacity):
+		self.pops = []
+
+		self.customer_num = customer_num
+		self.customers = customers
+		self.dis = dis
+		self.capacity = capacity
+
+		self.initial_routes_generates()
+
+	def initial_routes_generates(self):
+		customer_list = [i for i in range(1, self.customer_num + 1)]
+		to_visit = customer_list[:]
+		routes = []
+		distances = []
+		route = [0]
+		temp_load = 0
+		temp_time = 0
+		temp_dis = 0
+
+		#从头遍历判断一个顾客顾客是否满足情况，如果满足的话就扣减，如果不符合情况就跳过（先判断是不是最后一个如果是最后一个认为一条路径完结）
+		while customer_list:
+			for customer in customer_list:
+				if self.customers[customer]['demand'] + temp_load < self.capacity:
+					temp = temp_time + self.dis[route[-1], customer]
+					if temp <= self.customers[customer]['end']:
+						temp_time = max(temp, self.customers[customer]['start']) + self.customers[customer]['service']
+						temp_dis += self.dis[route[-1],customer]
+						temp_load = temp_load + self.customers[customer]['demand']
+						route.append(customer)
+						to_visit.remove(customer)
+					else:
+						if customer == customer_list[-1]:
+							route.append(self.customer_num + 1)
+							temp_dis += self.dis[route[-1],self.customer_num+1]
+							routes.append(route[:])
+							distances.append(temp_dis)
+							route = [0]
+							temp_dis = 0
+							temp_load = 0
+							temp_time = 0
+				else:
+					if customer == customer_list[-1]:
+						route.append(self.customer_num + 1)
+						temp_dis += self.dis[route[-1], self.customer_num + 1]
+						routes.append(route[:])
+						distances.append(temp_dis)
+						route = [0]
+						temp_load = 0
+						temp_time = 0
+
+			customer_list = to_visit[:]
+
+		if len(route) > 1:
+			route.append(self.customer_num + 1)
+			temp_dis += self.dis[route[-1],self.customer_num+1]
+			distances.append(temp_dis)
+			routes.append(route)
+
+
+		for dis,path in zip(distances,routes):
+			self.pops.append(Individual(path,dis))
+
+	def evaluate(self,dual):
+		for pop in self.pops:
+			pop.evaluate_under_dual(dual)
+
+
+
+
+
+
+
+
 
 class MCTS(object):
 	def __init__(self, dis, customers, capacity, customer_number):
@@ -27,7 +110,7 @@ class MCTS(object):
 
 		self.updated = [False] * (customer_number + 2)
 
-		self.rel_matrix = np.random.rand(customer_number+1,customer_number+1)
+		self.rel_matrix = np.random.rand(customer_number + 1, customer_number + 1)
 
 		self.iteration = 10
 		self.dual = None
@@ -46,7 +129,7 @@ class MCTS(object):
 		pop.cost = root.quality
 		pop.path = root.best_quality_route[:]
 
-		pop.query = [False]*(pop.customer_number+1)
+		pop.query = [False] * (pop.customer_number + 1)
 
 
 class Node(object):
@@ -82,7 +165,7 @@ class Node(object):
 		temp_reachable = list(self.pop.customer_list - self.tabu - self.selected)
 
 		if not self.pop.query[self.current]:
-			self.pop.update(self.current,list(self.pop.customer_list-self.tabu))
+			self.pop.update(self.current, list(self.pop.customer_list - self.tabu))
 		# Todo the evolutionary process of particle is need to be added in this function
 		p = self.softmax(self.pop.x[self.current, temp_reachable])
 		reachable = int(np.random.choice(temp_reachable, size=1, replace=False, p=p)[-1])
@@ -123,11 +206,10 @@ class Node(object):
 			else:
 				self.children[selected_index].select()
 
-
 	def backup(self):
 		cur = self
 		while cur.father:
-			#Todo there is a problem, the min/max quality
+			# Todo there is a problem, the min/max quality
 			cur.father.min_quality = min(cur.father.min_quality, cur.quality)
 			cur.father.max_quality = max(cur.father.max_quality, cur.quality)
 
@@ -141,7 +223,6 @@ class Node(object):
 
 	def rollout(self):
 		## generate a route
-
 
 		rollout_path = self.path[:]
 		rollout_set = set(rollout_path)
@@ -174,29 +255,32 @@ class Node(object):
 			a = 0
 
 		return (self.quality - self.father.min_quality) / (self.father.max_quality - self.father.min_quality) + \
-			   self.pop.x[self.father.current, self.current] + self.c * math.sqrt((math.log(self.father.visited_times) / self.visited_times))
+			   self.pop.x[self.father.current, self.current] + self.c * math.sqrt(
+			(math.log(self.father.visited_times) / self.visited_times))
 
 	def softmax(self, x):
 		return np.exp(x) / np.sum(np.exp(x), axis=0)
 
 
 class Solver(object):
-	def __init__(self, path, num):
+	def __init__(self, path, num, capacity=200):
 		self.customers = {}
-		self.num = num
+		self.customer_num = num
 		self.path = path
 		self.dis = {}
 		self.routes = {}
 		self.rmp = None
+		self.customer_list = set(range(1, num + 2))
 
-		self.capacity = int(path.split('.')[0].split('_')[-1])
-
-		self.population = Population(num)
-
+		# self.capacity = int(path.split('.')[0].split('_')[-1])
+		self.capacity = capacity
 		self.problem_csv()
 		self.pre_press()
 		self.set_cover()
-		self.initial_routes_generates()
+
+
+		self.population = Population(self.customer_num,self.customers,self.dis,self.capacity)
+		self.mcts = MCTS()
 
 	def problem_csv(self):
 		flag = False
@@ -217,20 +301,20 @@ class Solver(object):
 					self.customers[length]['end'] = int(float(temp[5]))
 					self.customers[length]['service'] = int(float(temp[6]))
 
-					if length == self.num:
+					if length == self.customer_num:
 						length = len(self.customers)
 						self.customers[length] = copy.deepcopy(self.customers[0])
 						break
 
 	def dis_calcul(self):
-		for i in range(self.num + 2):
-			for j in range(self.num + 2):
+		for i in range(self.customer_num + 2):
+			for j in range(self.customer_num + 2):
 				if i == j:
 					self.dis[(i, j)] = 0
 					continue
-				if i == 0 and j == self.num + 1:
+				if i == 0 and j == self.customer_num + 1:
 					self.dis[(i, j)] = 0
-				if i == self.num + 1 and j == 0:
+				if i == self.customer_num + 1 and j == 0:
 					self.dis[(i, j)] = 0
 				temp = [self.customers[i]['loc'][0] - self.customers[j]['loc'][0],
 						self.customers[i]['loc'][1] - self.customers[j]['loc'][1]]
@@ -240,10 +324,10 @@ class Solver(object):
 		self.dis_calcul()
 		for start, customer in self.customers.items():
 			customer['tabu'] = set()
-			if start == self.num + 1:
+			if start == self.customer_num + 1:
 				a = 0
 				return
-			for target in range(1, self.num + 2):
+			for target in range(1, self.customer_num + 2):
 				if customer['start'] + customer['service'] + self.dis[start, target] > self.customers[target]['end']:
 					# print(customer['start'],customer['service'],dis[start,target],customer['start']+customer['service']+dis[start,target],customers[target]['end'])
 					customer['tabu'].add(target)
@@ -252,14 +336,14 @@ class Solver(object):
 		self.rmp = gp.Model('rmp')
 		self.rmp.Params.logtoconsole = 0
 
-		for i in range(self.num):
+		for i in range(self.customer_num):
 			index = i + 1
-			fea = self.path_eva_vrptw([index, self.num + 1])
+			fea = self.path_eva_vrptw([index, self.customer_num + 1])
 			if not fea:
-				print('unfeasible', [index, self.num])
+				print('unfeasible', [index, self.customer_num])
 			self.routes[index]['var'] = self.rmp.addVar(ub=1, lb=0, obj=self.routes[index]['distance'], name='x')
 
-		cons = self.rmp.addConstrs(self.routes[index]['var'] == 1 for index in range(1, self.num + 1))
+		cons = self.rmp.addConstrs(self.routes[index]['var'] == 1 for index in range(1, self.customer_num + 1))
 
 		self.rmp.update()
 
@@ -298,47 +382,6 @@ class Solver(object):
 
 		return fea
 
-	def initial_routes_generates(self):
-		customer_list = [i for i in range(1, self.num + 1)]
-		to_visit = customer_list[:]
-		routes = []
-		route = [0]
-		temp_load = 0
-		temp_time = 0
-
-		while customer_list:
-			for customer in customer_list:
-				if self.customers[customer]['demand'] + temp_load < self.capacity:
-					temp = temp_time + self.dis[route[-1], customer]
-					if temp <= self.customers[customer]['end']:
-						temp_time = max(temp, self.customers[customer]['start']) + self.customers[customer]['service']
-						temp_load = temp_load + self.customers[customer]['demand']
-						route.append(customer)
-						to_visit.remove(customer)
-					else:
-						if customer == customer_list[-1]:
-							route.append(self.num + 1)
-							routes.append(route[:])
-							route = [0]
-							temp_load = 0
-							temp_time = 0
-				else:
-					if customer == customer_list[-1]:
-						route.append(self.num + 1)
-						routes.append(route[:])
-						route = [0]
-						temp_load = 0
-						temp_time = 0
-
-			customer_list = to_visit[:]
-
-		if len(route) > 1:
-			route.append(self.num + 1)
-			routes.append(route)
-
-		self.add_column(routes)
-
-
 	def linear_relaxition(self):
 		self.rmp.optimize()
 		dual = self.rmp.getAttr(GRB.Attr.Pi, self.rmp.getConstrs())
@@ -352,18 +395,20 @@ class Solver(object):
 				continue
 			temp_length = len(self.routes)
 			added_column = gp.Column(self.routes[temp_length]['column'], self.rmp.getConstrs())
-			self.routes[temp_length]['var'] = self.rmp.addVar(column=added_column, obj=self.routes[temp_length]['distance'])
+			self.routes[temp_length]['var'] = self.rmp.addVar(column=added_column,
+															  obj=self.routes[temp_length]['distance'])
+
+	def paths_generate(self,dual):
+		self.population.evaluate(dual)
 
 	def solve(self):
-		population = Population()
-		mcts = MCTS()
-		dual = self.step()
 
+		dual = self.rmp.step()
 
 		best_reduced_cost = 1e6
-		while best_reduced_cost> -(1e-1):
-			pass
+		while best_reduced_cost > -(1e-1):
+			paths = self.paths_generate(dual)
 
 
-
-
+if __name__ == '__main__':
+	solver = Solver('../data/C101_200.csv', 100,200)
