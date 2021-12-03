@@ -4,7 +4,7 @@ from gurobipy import GRB
 import math
 import copy
 import numpy as np
-
+import pickle
 
 # 0 is not appear in path
 class Individual(object):
@@ -106,30 +106,25 @@ class MCTS(object):
 		self.customer_number = customer_number
 		self.capacity = capacity
 
-		self.customer_list = set(range(1, customer_number + 2))
-
-		self.updated = [False] * (customer_number + 2)
-
-		self.rel_matrix = np.random.rand(customer_number + 1, customer_number + 1)
 
 		self.iteration = 10
 		self.dual = None
 
-	def find_path(self, pop):
+	def matrix_init(self):
+		self.rel_matrix = np.random.rand(customers+2,customer_number+2)
+		for customer,information in self.customers.item():
+			self.rel_matrix[customer,list(information['tabu'])] = 0
+
+	def find_path(self):
 		# MCTS_decoder
 		root = Node(0, self.customers)
 
 		root.path.append(0)
 		root.dual = self.dual
 		root.dis = self.dis
-		root.pop = pop
 
 		for _ in range(self.iteration):
 			root.select()
-		pop.cost = root.quality
-		pop.path = root.best_quality_route[:]
-
-		pop.query = [False] * (pop.customer_number + 1)
 
 
 class Node(object):
@@ -143,7 +138,6 @@ class Node(object):
 		self.dual = None
 		self.tabu = self.customers[index]['tabu']
 		self.selected = set()
-		self.pop = None
 
 		self.children = []
 		self.father = None
@@ -161,14 +155,11 @@ class Node(object):
 		self.path = []
 		self.best_quality_route = None
 
-	def expand(self):
-		temp_reachable = list(self.pop.customer_list - self.tabu - self.selected)
+	def expand(self,reachable_customers):
 
-		if not self.pop.query[self.current]:
-			self.pop.update(self.current, list(self.pop.customer_list - self.tabu))
-		# Todo the evolutionary process of particle is need to be added in this function
-		p = self.softmax(self.pop.x[self.current, temp_reachable])
-		reachable = int(np.random.choice(temp_reachable, size=1, replace=False, p=p)[-1])
+
+		p = self.softmax(self.pop.x[self.current, reachable_customers])
+		reachable = int(np.random.choice(reachable_customers, size=1, replace=False, p=p)[-1])
 		self.selected.add(reachable)
 
 		# generate a new child
@@ -197,8 +188,10 @@ class Node(object):
 			new_child.rollout()
 
 	def select(self):
-		if len(self.children) < self.max_children and len(self.pop.customer_list - self.tabu - self.selected) > 0:
-			self.expand()
+		reachable_customers = self.customer_list - self.tabu - self.selected
+
+		if len(self.children) < self.max_children and len(reachable_customers)>0:
+			self.expand(reachable_customers)
 		else:
 			selected_index = np.argmax(list(map(lambda x: x.get_score(), self.children)))
 			if self.children[selected_index].state == 'terminal':
@@ -324,8 +317,8 @@ class Solver(object):
 		self.dis_calcul()
 		for start, customer in self.customers.items():
 			customer['tabu'] = set()
+			customer['tabu'].add(start)
 			if start == self.customer_num + 1:
-				a = 0
 				return
 			for target in range(1, self.customer_num + 2):
 				if customer['start'] + customer['service'] + self.dis[start, target] > self.customers[target]['end']:
@@ -400,6 +393,9 @@ class Solver(object):
 
 	def paths_generate(self,dual):
 		self.population.evaluate(dual)
+		# two ways to generate the path
+		# 1.evolutionary operator 2.MCTS
+		# MCTS consider two factors: the customer number in current population, the dual, the negative information from population
 
 	def solve(self):
 
@@ -412,3 +408,23 @@ class Solver(object):
 
 if __name__ == '__main__':
 	solver = Solver('../data/C101_200.csv', 100,200)
+	exit()
+	#test for mcts
+	dual = [30.46, 36.0, 44.72, 50.0, 41.24, 22.36, 42.42, 52.5, 64.04, 51.0, 67.08, 30.0, 22.36, 64.04, 60.82, 58.3,
+			60.82, 31.62, 64.04, 63.24, 36.06, 53.86, 72.12, 60.0, -9.77000000000001, 22.36, 10.0, 12.64, 59.66, 51.0,
+			34.92, 68.0, 49.52, 72.12, 74.97, 82.8, 42.42, 84.86, 67.94, 22.36, 57.72, 51.0, 68.36, 63.78, 58.3, 39.94,
+			68.42, -11.430000000000007, 68.82, -7.75, 53.86, 22.62, 8.94, 28.900000000000006, -8.009999999999991, 40.97,
+			46.38, 17.369999999999997, 35.6, -23.93, 51.0, 51.0, 69.86, 93.04, 99.86, 19.909999999999997, 87.72,
+			-10.100000000000009, 24.34, -146.32000000000002, 0.030000000000001137, 44.94, 40.24, 23.940000000000012,
+			55.56, 31.3, -37.219999999999985, 54.92, 5.079999999999995, -0.6599999999999966, 33.35000000000001, 46.64,
+			42.2, 48.66, 24.72, 35.730000000000004, 12.739999999999995, 38.48, -28.500000000000007, -62.43000000000001,
+			51.22, 36.76, -73.82, -26.92, 29.74, -68.12, -66.98999999999998, 42.52, -57.730000000000004, -135.7]
+	capacity = 200
+	customer_number = 100
+	with open('../dis.pkl', 'rb') as pkl:
+		dis = pickle.load(pkl)
+	with open('../customers.pkl', 'rb') as pkl2:
+		customers = pickle.load(pkl2)
+
+
+	mcts = MCTS(dis,customers,capacity,customer_number)
