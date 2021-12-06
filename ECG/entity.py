@@ -108,34 +108,42 @@ class MCTS(object):
 
 
 		self.iteration = 10
-		self.dual = None
+
+		self.matrix_init()
 
 	def matrix_init(self):
-		self.rel_matrix = np.random.rand(customers+2,customer_number+2)
-		for customer,information in self.customers.item():
+		self.rel_matrix = np.random.rand(customer_number+2,customer_number+2)
+		for customer,information in self.customers.items():
 			self.rel_matrix[customer,list(information['tabu'])] = 0
 
-	def find_path(self):
+	def find_path(self,dual):
+		dual = [0] + dual + [0]
 		# MCTS_decoder
-		root = Node(0, self.customers)
+		root = Node(0, self.customers,self.rel_matrix)
 
 		root.path.append(0)
-		root.dual = self.dual
+		root.dual = dual
 		root.dis = self.dis
+		root.demand = 0
+		root.rel_matrix = self.rel_matrix
+		root.capacity = self.capacity
+
 
 		for _ in range(self.iteration):
 			root.select()
 
 
 class Node(object):
-	def __init__(self, index, customers):
+	def __init__(self, index, customers,matrix):
 		self.current = index
 		self.current_dis = 0
 		self.current_time = 0
 
 		self.customers = customers
+		self.customer_list = set([i for i in range(1,len(customers))])
 		self.dis = None
 		self.dual = None
+		self.demand = None
 		self.tabu = self.customers[index]['tabu']
 		self.selected = set()
 
@@ -155,26 +163,27 @@ class Node(object):
 		self.path = []
 		self.best_quality_route = None
 
+		self.rel_matrix = matrix
+
 	def expand(self,reachable_customers):
 
 
-		p = self.softmax(self.pop.x[self.current, reachable_customers])
-		reachable = int(np.random.choice(reachable_customers, size=1, replace=False, p=p)[-1])
+		p = self.softmax(self.rel_matrix[self.current, list(reachable_customers)])
+		reachable = int(np.random.choice(list(reachable_customers), size=1, replace=False, p=p)[-1])
 		self.selected.add(reachable)
 
 		# generate a new child
-		new_child = Node(reachable, self.customers)
+		new_child = Node(reachable, self.customers,self.rel_matrix)
 		new_child.father = self
 		new_child.dual = self.dual
 		new_child.dis = self.dis
-		new_child.pop = self.pop
+		new_child.rel_matrix = self.rel_matrix
 
 		new_child.tabu.update(self.tabu)
 		new_child.selected.update()
 		new_child.path = self.path + [reachable]
 		new_child.current_dis = self.dis[self.current, reachable] + self.current_dis - self.dual[self.current]
-		new_child.current_time = self.current_time + self.dis[self.current, reachable] + \
-								 self.customers[new_child.current]['service']
+		new_child.current_time = max(self.current_time + self.dis[self.current, reachable],self.customers[reachable]['start'])+self.customers[reachable]['service']
 
 		self.children.append(new_child)
 
@@ -188,8 +197,15 @@ class Node(object):
 			new_child.rollout()
 
 	def select(self):
+		# customers_list - already visited customers - cannot visit (time window) - this node selected
 		reachable_customers = self.customer_list - self.tabu - self.selected
-
+		# - cannot visit capacity
+		unreachable = set()
+		for customer in reachable_customers:
+			if customers[customer]['demand']+self.demand > self.capacity:
+				unreachable.add(customer)
+		reachable_customers = reachable_customers-unreachable
+		# the return depot can be selected at any time
 		if len(self.children) < self.max_children and len(reachable_customers)>0:
 			self.expand(reachable_customers)
 		else:
@@ -407,8 +423,8 @@ class Solver(object):
 
 
 if __name__ == '__main__':
-	solver = Solver('../data/C101_200.csv', 100,200)
-	exit()
+	# solver = Solver('../data/C101_200.csv', 100,200)
+	# exit()
 	#test for mcts
 	dual = [30.46, 36.0, 44.72, 50.0, 41.24, 22.36, 42.42, 52.5, 64.04, 51.0, 67.08, 30.0, 22.36, 64.04, 60.82, 58.3,
 			60.82, 31.62, 64.04, 63.24, 36.06, 53.86, 72.12, 60.0, -9.77000000000001, 22.36, 10.0, 12.64, 59.66, 51.0,
@@ -425,6 +441,9 @@ if __name__ == '__main__':
 		dis = pickle.load(pkl)
 	with open('../customers.pkl', 'rb') as pkl2:
 		customers = pickle.load(pkl2)
+	for customer, info in customers.items():
+		info['tabu'].add(customer)
 
 
 	mcts = MCTS(dis,customers,capacity,customer_number)
+	mcts.find_path(dual)
