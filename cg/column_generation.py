@@ -19,7 +19,7 @@ class Solver(object):
 		self.routes = {}
 		self.rmp = None
 
-		self.capacity = int(path.split('.')[0].split('_')[-1])
+		self.capacity = 200
 
 
 
@@ -272,6 +272,7 @@ def main(path,num):
 	dual = solver.step()
 
 	objs, paths = labeling_Algoithm_vrptw.labeling_algorithm(dual, solver.dis, solver.customers, solver.capacity, solver.num)
+	# plot(paths[0],solver.customers)
 	while objs[0] < -(1e-1):
 		solver.add_column(paths)
 		dual = solver.step()
