@@ -6,24 +6,24 @@ import copy
 import numpy as np
 import pickle
 
+
 # 0 is not appear in path
 class Individual(object):
-	def __init__(self,path,dis):
+	def __init__(self, path, dis):
 		self.path = path
 		self.dis = dis
 
 		self.cost = 0
 
-	def evaluate_under_dual(self,dual):
+	def evaluate_under_dual(self, dual):
 		for customer in self.path[:-1]:
 			self.cost += dual[customer]
 
 		self.cost += self.dis
 
 
-
 class Population(object):
-	def __init__(self,customer_num,customers,dis,capacity):
+	def __init__(self, customer_num, customers, dis, capacity):
 		self.pops = []
 
 		self.customer_num = customer_num
@@ -43,21 +43,21 @@ class Population(object):
 		temp_time = 0
 		temp_dis = 0
 
-		#从头遍历判断一个顾客顾客是否满足情况，如果满足的话就扣减，如果不符合情况就跳过（先判断是不是最后一个如果是最后一个认为一条路径完结）
+		# 从头遍历判断一个顾客顾客是否满足情况，如果满足的话就扣减，如果不符合情况就跳过（先判断是不是最后一个如果是最后一个认为一条路径完结）
 		while customer_list:
 			for customer in customer_list:
 				if self.customers[customer]['demand'] + temp_load < self.capacity:
 					temp = temp_time + self.dis[route[-1], customer]
 					if temp <= self.customers[customer]['end']:
 						temp_time = max(temp, self.customers[customer]['start']) + self.customers[customer]['service']
-						temp_dis += self.dis[route[-1],customer]
+						temp_dis += self.dis[route[-1], customer]
 						temp_load = temp_load + self.customers[customer]['demand']
 						route.append(customer)
 						to_visit.remove(customer)
 					else:
 						if customer == customer_list[-1]:
 							route.append(self.customer_num + 1)
-							temp_dis += self.dis[route[-1],self.customer_num+1]
+							temp_dis += self.dis[route[-1], self.customer_num + 1]
 							routes.append(route[:])
 							distances.append(temp_dis)
 							route = [0]
@@ -78,24 +78,16 @@ class Population(object):
 
 		if len(route) > 1:
 			route.append(self.customer_num + 1)
-			temp_dis += self.dis[route[-1],self.customer_num+1]
+			temp_dis += self.dis[route[-1], self.customer_num + 1]
 			distances.append(temp_dis)
 			routes.append(route)
 
+		for dis, path in zip(distances, routes):
+			self.pops.append(Individual(path, dis))
 
-		for dis,path in zip(distances,routes):
-			self.pops.append(Individual(path,dis))
-
-	def evaluate(self,dual):
+	def evaluate(self, dual):
 		for pop in self.pops:
 			pop.evaluate_under_dual(dual)
-
-
-
-
-
-
-
 
 
 class MCTS(object):
@@ -106,50 +98,51 @@ class MCTS(object):
 		self.customer_number = customer_number
 		self.capacity = capacity
 
-
-		self.iteration = 10
+		self.iteration = 50
 
 		self.matrix_init()
 
 	def matrix_init(self):
-		self.rel_matrix = np.random.rand(customer_number+2,customer_number+2)
-		for customer,information in self.customers.items():
-			self.rel_matrix[customer,list(information['tabu'])] = 0
+		self.rel_matrix = np.random.rand(customer_number + 2, customer_number + 2)
+		for customer, information in self.customers.items():
+			self.rel_matrix[customer, list(information['tabu'])] = 0
 
-	def find_path(self,dual):
+	def find_path(self, dual):
 		dual = [0] + dual + [0]
 		# MCTS_decoder
-		root = Node(0, self.customers,self.rel_matrix)
+		root = Node(0, self.customers, self.rel_matrix, dual, self.dis, self.capacity)
 
 		root.path.append(0)
 		root.dual = dual
 		root.dis = self.dis
 		root.demand = 0
-		root.rel_matrix = self.rel_matrix
 		root.capacity = self.capacity
-
 
 		for _ in range(self.iteration):
 			root.select()
 
+		exit()
+
 
 class Node(object):
-	def __init__(self, index, customers,matrix):
+	def __init__(self, index, customers, matrix, dual, dis, capacity):
 		self.current = index
 		self.current_dis = 0
 		self.current_time = 0
+		self.current_cost = 0
 
 		self.customers = customers
-		self.customer_list = set([i for i in range(1,len(customers))])
-		self.dis = None
-		self.dual = None
+		self.customer_list = set([i for i in range(1, len(customers))])
+		self.dis = dis
+		self.dual = dual
 		self.demand = None
-		self.tabu = self.customers[index]['tabu']
+		self.capacity = capacity
+		self.tabu = copy.deepcopy(self.customers[index]['tabu'])
 		self.selected = set()
 
 		self.children = []
 		self.father = None
-		self.max_children = 5
+		self.max_children = 20
 
 		self.c = 1
 
@@ -165,26 +158,48 @@ class Node(object):
 
 		self.rel_matrix = matrix
 
-	def expand(self,reachable_customers):
+	def evaluate(self, path):
+		cur = 0
+		dis_eva = 0
+		cost_eva = 0
+		time_eva = 0
+		for cus in path:
+			if time_eva + self.dis[cus, cur] > self.customers[cus]['end']:
+				print('wrong' + str(cur))
+				return
+			else:
+				time_eva = max(time_eva + self.dis[cus, cur], self.customers[cus]['start']) + self.customers[cus][
+					'service']
+				dis_eva += self.dis[cur, cus]
+				cost_eva += (self.dis[cur, cus] - self.dual[cur])
+			cur = cus
+		demand = sum([customers[x]['demand'] for x in path[:-1]])
+		if demand > self.capacity:
+			print('wrong capacity')
 
+		print(dis_eva, cost_eva)
+
+	def expand(self, reachable_customers):
 
 		p = self.softmax(self.rel_matrix[self.current, list(reachable_customers)])
 		reachable = int(np.random.choice(list(reachable_customers), size=1, replace=False, p=p)[-1])
 		self.selected.add(reachable)
 
 		# generate a new child
-		new_child = Node(reachable, self.customers,self.rel_matrix)
+		new_child = Node(reachable, self.customers, self.rel_matrix, self.dual, self.dis, self.capacity)
 		new_child.father = self
 		new_child.dual = self.dual
 		new_child.dis = self.dis
 		new_child.rel_matrix = self.rel_matrix
 
 		new_child.tabu.update(self.tabu)
-		new_child.selected.update()
 		new_child.path = self.path + [reachable]
-		new_child.current_dis = self.dis[self.current, reachable] + self.current_dis - self.dual[self.current]
-		new_child.current_time = max(self.current_time + self.dis[self.current, reachable],self.customers[reachable]['start'])+self.customers[reachable]['service']
-
+		new_child.current_cost = self.dis[self.current, reachable] + self.current_cost - self.dual[self.current]
+		new_child.current_dis = self.dis[self.current, reachable] + self.current_dis
+		new_child.current_time = max(self.current_time + self.dis[self.current, reachable],
+									 self.customers[reachable]['start']) + self.customers[reachable]['service']
+		new_child.demand = self.demand + self.customers[reachable]['demand']
+		new_child.capacity = self.capacity
 		self.children.append(new_child)
 
 		if new_child.current == len(self.customers) - 1:
@@ -200,13 +215,11 @@ class Node(object):
 		# customers_list - already visited customers - cannot visit (time window) - this node selected
 		reachable_customers = self.customer_list - self.tabu - self.selected
 		# - cannot visit capacity
-		unreachable = set()
-		for customer in reachable_customers:
-			if customers[customer]['demand']+self.demand > self.capacity:
-				unreachable.add(customer)
-		reachable_customers = reachable_customers-unreachable
+		reachable_customers = list(filter(
+			lambda x: self.customers[x]['demand'] + self.demand <= self.capacity and self.current_time + self.dis[
+				x, self.current] <= self.customers[x]['end'], reachable_customers))
 		# the return depot can be selected at any time
-		if len(self.children) < self.max_children and len(reachable_customers)>0:
+		if len(self.children) < self.max_children and len(reachable_customers) > 0:
 			self.expand(reachable_customers)
 		else:
 			selected_index = np.argmax(list(map(lambda x: x.get_score(), self.children)))
@@ -239,19 +252,29 @@ class Node(object):
 
 		rollout_dis = self.current_dis
 		rollout_time = self.current_time
+		rollout_cost = self.current_cost
+		demand = self.demand
+		rollout_tabu = copy.deepcopy(self.tabu)
 		while current_customer != len(self.customers) - 1:
-			# Todo a feasibility test can be added to test the performance of pre_process
-			candidates = list(self.pop.customer_list - self.customers[current_customer]['tabu'] - rollout_set)
-			next_customer = list(candidates)[np.argmax(self.pop.x[current_customer, candidates])]
+			# Todo current rollout policy is just choosing the maximum value of relationship matrix
+			candidates = list(self.customer_list - rollout_tabu - rollout_set)
+			candidates = list(filter(
+				lambda x: customers[x]['demand'] + demand <= self.capacity and rollout_time + self.dis[
+					current_customer, x] < self.customers[x]['end'], candidates))
+			next_customer = list(candidates)[np.argmax(self.rel_matrix[current_customer, candidates])]
 			rollout_path.append(next_customer)
 			rollout_set.add(next_customer)
 
-			rollout_dis += self.dis[current_customer, next_customer] - self.dual[current_customer]
-			rollout_time += self.dis[current_customer, next_customer] + self.customers[current_customer]['service']
+			rollout_cost += (self.dis[current_customer, next_customer] - self.dual[current_customer])
+			rollout_dis += self.dis[current_customer, next_customer]
+			rollout_time = max(rollout_time + self.dis[current_customer, next_customer],
+							   self.customers[next_customer]['start']) + self.customers[next_customer]['service']
+			rollout_tabu.update(self.customers[next_customer]['tabu'])
+			demand += self.customers[next_customer]['demand']
 
 			current_customer = next_customer
 
-		self.quality = rollout_dis
+		self.quality = rollout_cost
 		self.visited_times += 1
 		self.best_quality_route = rollout_path[:]
 		self.backup()
@@ -262,9 +285,12 @@ class Node(object):
 	def get_score(self):
 		if not self.visited_times:
 			a = 0
+		if self.father.min_quality == self.father.max_quality:
+			# only one children node for father thus only one choice
+			return 1
 
-		return (self.quality - self.father.min_quality) / (self.father.max_quality - self.father.min_quality) + \
-			   self.pop.x[self.father.current, self.current] + self.c * math.sqrt(
+		return -(self.quality - self.father.min_quality) / (self.father.max_quality - self.father.min_quality) + \
+			   self.rel_matrix[self.father.current, self.current] + self.c * math.sqrt(
 			(math.log(self.father.visited_times) / self.visited_times))
 
 	def softmax(self, x):
@@ -287,9 +313,8 @@ class Solver(object):
 		self.pre_press()
 		self.set_cover()
 
-
-		self.population = Population(self.customer_num,self.customers,self.dis,self.capacity)
-		self.mcts = MCTS()
+		self.population = Population(self.customer_num, self.customers, self.dis, self.capacity)
+		self.mcts = MCTS(self.dis, self.customers, self.capacity, self.customer_num)
 
 	def problem_csv(self):
 		flag = False
@@ -407,11 +432,12 @@ class Solver(object):
 			self.routes[temp_length]['var'] = self.rmp.addVar(column=added_column,
 															  obj=self.routes[temp_length]['distance'])
 
-	def paths_generate(self,dual):
+	def paths_generate(self, dual):
 		self.population.evaluate(dual)
-		# two ways to generate the path
-		# 1.evolutionary operator 2.MCTS
-		# MCTS consider two factors: the customer number in current population, the dual, the negative information from population
+
+	# two ways to generate the path
+	# 1.evolutionary operator 2.MCTS
+	# MCTS consider two factors: the customer number in current population, the dual, the negative information from population
 
 	def solve(self):
 
@@ -423,9 +449,9 @@ class Solver(object):
 
 
 if __name__ == '__main__':
-	# solver = Solver('../data/C101_200.csv', 100,200)
-	# exit()
-	#test for mcts
+	solver = Solver('../data/C101_200.csv', 100, 200)
+	exit()
+	# test for mcts
 	dual = [30.46, 36.0, 44.72, 50.0, 41.24, 22.36, 42.42, 52.5, 64.04, 51.0, 67.08, 30.0, 22.36, 64.04, 60.82, 58.3,
 			60.82, 31.62, 64.04, 63.24, 36.06, 53.86, 72.12, 60.0, -9.77000000000001, 22.36, 10.0, 12.64, 59.66, 51.0,
 			34.92, 68.0, 49.52, 72.12, 74.97, 82.8, 42.42, 84.86, 67.94, 22.36, 57.72, 51.0, 68.36, 63.78, 58.3, 39.94,
@@ -444,6 +470,5 @@ if __name__ == '__main__':
 	for customer, info in customers.items():
 		info['tabu'].add(customer)
 
-
-	mcts = MCTS(dis,customers,capacity,customer_number)
+	mcts = MCTS(dis, customers, capacity, customer_number)
 	mcts.find_path(dual)
