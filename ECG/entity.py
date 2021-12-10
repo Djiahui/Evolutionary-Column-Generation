@@ -98,13 +98,25 @@ class MCTS(object):
 		self.customer_number = customer_number
 		self.capacity = capacity
 
-		self.iteration = 50
+		self.iteration = 10000
 
-		self.matrix_init()
 
-	def matrix_init(self):
-		self.rel_matrix = np.random.rand(customer_number + 2, customer_number + 2)
+	def matrix_init(self,dual):
+		dual = [0] + dual + [0]
+		self.rel_matrix = np.zeros((self.customer_number + 2, self.customer_number + 2))
+		customer_set = set([ i for i in range(1,self.customer_number+2)])
 		for customer, information in self.customers.items():
+			candidates = customer_set-information['tabu']
+			if customer == 0 :
+				candidates -= {self.customer_number+1}
+			dis_vec = [dual[customer]-self.dis[customer,to] for to in candidates]
+			max_dis = max(dis_vec)
+			min_dis = min(dis_vec)
+
+			dis_vec = [(x-min_dis)/(max_dis-min_dis) if max_dis>min_dis else 1 for x in dis_vec]
+
+			self.rel_matrix[customer,list(candidates)] = dis_vec
+
 			self.rel_matrix[customer, list(information['tabu'])] = 0
 
 	def find_path(self, dual):
@@ -117,6 +129,7 @@ class MCTS(object):
 		root.dis = self.dis
 		root.demand = 0
 		root.capacity = self.capacity
+		root.max_children=50
 
 		for _ in range(self.iteration):
 			root.select()
@@ -142,9 +155,9 @@ class Node(object):
 
 		self.children = []
 		self.father = None
-		self.max_children = 20
+		self.max_children = 100
 
-		self.c = 1
+		self.c = 2
 
 		self.state = None
 
@@ -261,7 +274,11 @@ class Node(object):
 			candidates = list(filter(
 				lambda x: customers[x]['demand'] + demand <= self.capacity and rollout_time + self.dis[
 					current_customer, x] < self.customers[x]['end'], candidates))
-			next_customer = list(candidates)[np.argmax(self.rel_matrix[current_customer, candidates])]
+
+			p = self.softmax(self.rel_matrix[current_customer, list(candidates)])
+			next_customer = int(np.random.choice(list(candidates), size=1, replace=False, p=p)[-1])
+
+			# next_customer = list(candidates)[np.argmax(self.rel_matrix[current_customer, candidates])]
 			rollout_path.append(next_customer)
 			rollout_set.add(next_customer)
 
@@ -416,7 +433,7 @@ class Solver(object):
 
 		return fea
 
-	def linear_relaxition(self):
+	def linear_relaxition_solve(self):
 		self.rmp.optimize()
 		dual = self.rmp.getAttr(GRB.Attr.Pi, self.rmp.getConstrs())
 		return dual
@@ -433,7 +450,8 @@ class Solver(object):
 															  obj=self.routes[temp_length]['distance'])
 
 	def paths_generate(self, dual):
-		self.population.evaluate(dual)
+		# self.population.evaluate(dual)
+		self.mcts.matrix_init(dual)
 
 	# two ways to generate the path
 	# 1.evolutionary operator 2.MCTS
@@ -441,7 +459,7 @@ class Solver(object):
 
 	def solve(self):
 
-		dual = self.rmp.step()
+		dual = self.linear_relaxition_solve()
 
 		best_reduced_cost = 1e6
 		while best_reduced_cost > -(1e-1):
@@ -449,9 +467,11 @@ class Solver(object):
 
 
 if __name__ == '__main__':
-	solver = Solver('../data/C101_200.csv', 100, 200)
-	exit()
-	# test for mcts
+	# solver = Solver('../data/C101_200.csv', 100, 200)
+	# solver.solve()
+	# solver.paths_generate()
+	# exit()
+	# # test for mcts
 	dual = [30.46, 36.0, 44.72, 50.0, 41.24, 22.36, 42.42, 52.5, 64.04, 51.0, 67.08, 30.0, 22.36, 64.04, 60.82, 58.3,
 			60.82, 31.62, 64.04, 63.24, 36.06, 53.86, 72.12, 60.0, -9.77000000000001, 22.36, 10.0, 12.64, 59.66, 51.0,
 			34.92, 68.0, 49.52, 72.12, 74.97, 82.8, 42.42, 84.86, 67.94, 22.36, 57.72, 51.0, 68.36, 63.78, 58.3, 39.94,
@@ -469,6 +489,8 @@ if __name__ == '__main__':
 		customers = pickle.load(pkl2)
 	for customer, info in customers.items():
 		info['tabu'].add(customer)
+	dual = [round(x,2) for x in dual]
 
 	mcts = MCTS(dis, customers, capacity, customer_number)
+	mcts.matrix_init(dual)
 	mcts.find_path(dual)

@@ -168,7 +168,7 @@ class Solver(object):
 		self.problem_csv()
 		self.pre_press()
 		self.set_cover()
-		self.initial_routes_generates()
+		# self.initial_routes_generates()
 
 	def step(self):
 		self.rmp.optimize()
