@@ -1,3 +1,5 @@
+import time
+
 import gurobipy as gp
 from gurobipy import GRB
 
@@ -271,7 +273,11 @@ def main(path,num):
 	solver.start()
 	dual = solver.step()
 
+	t = time.time()
+
 	objs, paths = labeling_Algoithm_vrptw.labeling_algorithm(dual, solver.dis, solver.customers, solver.capacity, solver.num)
+	print(time.time()-t)
+
 	# plot(paths[0],solver.customers)
 	while objs[0] < -(1e-1):
 		solver.add_column(paths)

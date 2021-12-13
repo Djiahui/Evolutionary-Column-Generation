@@ -1,3 +1,5 @@
+import time
+
 import gurobipy as gp
 from gurobipy import GRB
 
@@ -134,7 +136,9 @@ class MCTS(object):
 		for _ in range(self.iteration):
 			root.select()
 
-		exit()
+		return root.min_quality
+
+
 
 
 class Node(object):
@@ -192,6 +196,17 @@ class Node(object):
 
 		print(dis_eva, cost_eva)
 
+	def select(self):
+		reachable_customers = self.candidate_get(self.current,self.selected,self.tabu,self.demand,self.current_time)
+		if len(self.children) < self.max_children and len(reachable_customers) > 0:
+			self.expand(reachable_customers)
+		else:
+			selected_index = np.argmax(list(map(lambda x: x.get_score(), self.children)))
+			if self.children[selected_index].state == 'terminal':
+				self.children[selected_index].backup()
+			else:
+				self.children[selected_index].select()
+
 	def expand(self, reachable_customers):
 
 		p = self.softmax(self.rel_matrix[self.current, list(reachable_customers)])
@@ -222,24 +237,10 @@ class Node(object):
 			new_child.visited_times += 1
 			new_child.backup()
 		else:
-			new_child.rollout()
-
-	def select(self):
-		# customers_list - already visited customers - cannot visit (time window) - this node selected
-		reachable_customers = self.customer_list - self.tabu - self.selected
-		# - cannot visit capacity
-		reachable_customers = list(filter(
-			lambda x: self.customers[x]['demand'] + self.demand <= self.capacity and self.current_time + self.dis[
-				x, self.current] <= self.customers[x]['end'], reachable_customers))
-		# the return depot can be selected at any time
-		if len(self.children) < self.max_children and len(reachable_customers) > 0:
-			self.expand(reachable_customers)
-		else:
-			selected_index = np.argmax(list(map(lambda x: x.get_score(), self.children)))
-			if self.children[selected_index].state == 'terminal':
-				self.children[selected_index].backup()
+			if len(new_child.path)>3:
+				new_child.rollout_bfs()
 			else:
-				self.children[selected_index].select()
+				new_child.rollout()
 
 	def backup(self):
 		cur = self
@@ -256,9 +257,49 @@ class Node(object):
 
 			cur = cur.father
 
-	def rollout(self):
-		## generate a route
+	def rollout_bfs(self):
+		rollout_path = self.path[:]
+		rollout_set = set(rollout_path)
+		rollout_customer = self.current
 
+		rollout_dis = self.current_dis
+		rollout_time = self.current_time
+		rollout_cost = self.current_cost
+		demand = self.demand
+		rollout_tabu = copy.deepcopy(self.tabu)
+
+		best_cost = 1e6
+		best_path = None
+
+		queue = [(rollout_path, rollout_set, rollout_customer,rollout_dis,rollout_time,rollout_cost,demand, rollout_tabu)]
+		while queue:
+			path, path_set, current_customer,current_dis,current_time,current_cost,current_demand,current_tabu = queue.pop(0)
+			candidates = self.candidate_get(current_customer,path_set,current_tabu,current_demand,current_time)
+			if len(candidates)>1:
+				a = 10
+			for candidate in candidates:
+				can_path = path+[candidate]
+				can_set = set(can_path)
+				can_customer = candidate
+				can_dis = current_dis + self.dis[current_customer,can_customer]
+				can_time = max(current_time+self.dis[current_customer,can_customer],self.customers[can_customer]['start'])+self.customers[can_customer]['service']
+				can_cost = current_cost + self.dis[current_customer,can_customer] -self.dual[current_customer]
+				can_tabu = set()
+				can_tabu.update(current_tabu)
+				can_tabu.update(self.customers[can_customer]['tabu'])
+				can_demand = current_demand + self.customers[can_customer]['demand']
+				if candidate == len(self.customers) - 1 and can_cost< best_cost:
+					best_path = can_path
+					best_cost = can_cost
+				else:
+					queue.append((can_path,can_set,can_customer,can_dis,can_time,can_cost,can_demand,can_tabu))
+
+		self.quality = best_cost
+		self.visited_times += 1
+		self.best_quality_route = best_path
+		self.backup()
+
+	def rollout(self):
 		rollout_path = self.path[:]
 		rollout_set = set(rollout_path)
 		current_customer = self.current
@@ -269,12 +310,7 @@ class Node(object):
 		demand = self.demand
 		rollout_tabu = copy.deepcopy(self.tabu)
 		while current_customer != len(self.customers) - 1:
-			# Todo current rollout policy is just choosing the maximum value of relationship matrix
-			candidates = list(self.customer_list - rollout_tabu - rollout_set)
-			candidates = list(filter(
-				lambda x: customers[x]['demand'] + demand <= self.capacity and rollout_time + self.dis[
-					current_customer, x] < self.customers[x]['end'], candidates))
-
+			candidates = self.candidate_get(current_customer,rollout_set,rollout_tabu,demand,rollout_time)
 			p = self.softmax(self.rel_matrix[current_customer, list(candidates)])
 			next_customer = int(np.random.choice(list(candidates), size=1, replace=False, p=p)[-1])
 
@@ -296,8 +332,12 @@ class Node(object):
 		self.best_quality_route = rollout_path[:]
 		self.backup()
 
-	def iteration(self):
-		pass
+	def candidate_get(self,customer,selected_set,tabu,demand,time):
+		candidates = self.customer_list - tabu - selected_set
+		new_tabu = set([x for x in candidates if self.customers[x]['demand'] + demand > self.capacity and time + self.dis[customer, x] > self.customers[x]['end']])
+		candidates -= new_tabu
+		tabu.update(new_tabu)
+		return candidates
 
 	def get_score(self):
 		if not self.visited_times:
@@ -306,9 +346,12 @@ class Node(object):
 			# only one children node for father thus only one choice
 			return 1
 
-		return -(self.quality - self.father.min_quality) / (self.father.max_quality - self.father.min_quality) + \
-			   self.rel_matrix[self.father.current, self.current] + self.c * math.sqrt(
+		return math.sqrt(
 			(math.log(self.father.visited_times) / self.visited_times))
+
+		# return -(self.quality - self.father.min_quality) / (self.father.max_quality - self.father.min_quality) + \
+		# 	   self.rel_matrix[self.father.current, self.current] + self.c * math.sqrt(
+		# 	(math.log(self.father.visited_times) / self.visited_times))
 
 	def softmax(self, x):
 		return np.exp(x) / np.sum(np.exp(x), axis=0)
@@ -490,7 +533,11 @@ if __name__ == '__main__':
 	for customer, info in customers.items():
 		info['tabu'].add(customer)
 	dual = [round(x,2) for x in dual]
-
+	t = time.time()
 	mcts = MCTS(dis, customers, capacity, customer_number)
 	mcts.matrix_init(dual)
-	mcts.find_path(dual)
+	obj = mcts.find_path(dual)
+	print(obj)
+	print(time.time()-t)
+
+	exit()
