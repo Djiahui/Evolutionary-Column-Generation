@@ -7,12 +7,13 @@ import math
 import copy
 import numpy as np
 import pickle
-
+import random
 
 # 0 is not appear in path
 class Individual(object):
 	def __init__(self, path, dis):
 		self.path = path
+		self.arrive_time_vector = []
 		self.dis = dis
 
 		self.cost = 0
@@ -24,6 +25,7 @@ class Individual(object):
 		self.cost += self.dis
 
 
+
 class Population(object):
 	def __init__(self, customer_num, customers, dis, capacity):
 		self.pops = []
@@ -32,8 +34,35 @@ class Population(object):
 		self.customers = customers
 		self.dis = dis
 		self.capacity = capacity
-
+		self.customers_set = set([i for i in range(len(customers))])
 		self.initial_routes_generates()
+
+		self.dual = None
+
+	def pt(self, path,dual):
+		dual = [0]+dual + [0]
+		cur = 0
+		dis_eva = 0
+		cost_eva = 0
+		time_eva = 0
+		arrive_time = [0]
+		for cus in path:
+			arrive = time_eva+self.dis[cus,cur]
+			if arrive > self.customers[cus]['end']:
+				print('wrong' + str(cur))
+				return
+			else:
+				time_eva = max(arrive, self.customers[cus]['start']) + self.customers[cus][
+					'service']
+				arrive_time.append(arrive)
+				dis_eva += self.dis[cur, cus]
+				cost_eva += (self.dis[cur, cus] - dual[cur])
+			cur = cus
+		demand = sum([customers[x]['demand'] for x in path[:-1]])
+		if demand > self.capacity:
+			print('wrong capacity')
+
+		print(dis_eva, cost_eva,arrive_time)
 
 	def initial_routes_generates(self):
 		customer_list = [i for i in range(1, self.customer_num + 1)]
@@ -41,55 +70,86 @@ class Population(object):
 		routes = []
 		distances = []
 		route = [0]
+		arrive_times_vectors = []
+		arrive_time_vector = [0]
 		temp_load = 0
-		temp_time = 0
+		departure_time = 0
 		temp_dis = 0
 
 		# 从头遍历判断一个顾客顾客是否满足情况，如果满足的话就扣减，如果不符合情况就跳过（先判断是不是最后一个如果是最后一个认为一条路径完结）
 		while customer_list:
 			for customer in customer_list:
-				if self.customers[customer]['demand'] + temp_load < self.capacity:
-					temp = temp_time + self.dis[route[-1], customer]
-					if temp <= self.customers[customer]['end']:
-						temp_time = max(temp, self.customers[customer]['start']) + self.customers[customer]['service']
-						temp_dis += self.dis[route[-1], customer]
-						temp_load = temp_load + self.customers[customer]['demand']
-						route.append(customer)
-						to_visit.remove(customer)
-					else:
-						if customer == customer_list[-1]:
-							route.append(self.customer_num + 1)
-							temp_dis += self.dis[route[-1], self.customer_num + 1]
-							routes.append(route[:])
-							distances.append(temp_dis)
-							route = [0]
-							temp_dis = 0
-							temp_load = 0
-							temp_time = 0
-				else:
-					if customer == customer_list[-1]:
-						route.append(self.customer_num + 1)
-						temp_dis += self.dis[route[-1], self.customer_num + 1]
-						routes.append(route[:])
-						distances.append(temp_dis)
-						route = [0]
-						temp_load = 0
-						temp_time = 0
+				arrive_time = departure_time + self.dis[route[-1], customer]
+				if self.customers[customer]['demand'] + temp_load < self.capacity and arrive_time <= self.customers[customer]['end']:
+					arrive_time_vector.append(arrive_time)
+					departure_time = max(arrive_time, self.customers[customer]['start']) + self.customers[customer]['service']
+					temp_dis += self.dis[route[-1], customer]
+					temp_load = temp_load + self.customers[customer]['demand']
+					route.append(customer)
+					to_visit.remove(customer)
+				elif customer == customer_list[-1]:
+					arrive_time_vector.append(departure_time+self.dis[route[-1], self.customer_num + 1])
+					temp_dis += self.dis[route[-1], self.customer_num + 1]
+					route.append(self.customer_num + 1)
+					routes.append(route[:])
+					arrive_times_vectors.append(arrive_time_vector[:])
+					distances.append(temp_dis)
+					route = [0]
+					arrive_time_vector = [0]
+					temp_dis = 0
+					temp_load = 0
+					departure_time = 0
+
 
 			customer_list = to_visit[:]
 
 		if len(route) > 1:
-			route.append(self.customer_num + 1)
+			arrive_time_vector.append(departure_time + self.dis[route[-1], self.customer_num + 1])
 			temp_dis += self.dis[route[-1], self.customer_num + 1]
+			route.append(self.customer_num + 1)
 			distances.append(temp_dis)
 			routes.append(route)
+			arrive_times_vectors.append(arrive_time_vector[:])
 
-		for dis, path in zip(distances, routes):
+		for dis, path,arrive_time_vector in zip(distances, routes,arrive_times_vectors):
 			self.pops.append(Individual(path, dis))
+			self.pops[-1].arrive_time_vector = arrive_time_vector
 
 	def evaluate(self, dual):
 		for pop in self.pops:
 			pop.evaluate_under_dual(dual)
+
+	def mutation(self,pop):
+		"""
+		:type pop:ECG.entity.Individual
+		:param pop: Individual
+		:return:
+		"""
+		n = len(pop.path)
+
+		index = random.randint(1,n-2)
+
+		before_index = index-1
+		after_index = index+1
+		total_demand = sum([self.customers[x]['demand'] for x in pop.path[:index]])
+
+		start_service_time = max(pop.arrive_time_vector[before_index],self.customers[before_index]['start'])
+
+		candidates = self.customers_set-self.customers[before_index]['tabu']-{index}
+		new_tabu = set([x for x in candidates if (total_demand+self.customers[x]['demand']>self.capacity) and (start_service_time+self.customers[before_index]+self.dis[before_index,x]>self.customers[x]['end'])])
+		candidates -= new_tabu
+
+		threshold = min([self.customers[x]['end']-pop.arrive_time_vector[x] for x in pop.path[index:]])
+
+		selected_customers = [x for x in candidates if max(start_service_time+self.customers[before_index]['service']+self.dis[before_index,x],self.customers[x]['start'])+self.customers[x]['service']+self.dis[x,after_index]<pop.arrive_time_vector[after_index]+threshold]
+
+		better_selected_customers = [x for x in selected_customers if self.dis[before_index,x]+self.dis[x,after_index]-self.dual[x]<self.dis[before_index,index]+self.dis[index,after_index]-self.dual[index]]
+
+
+
+
+
+
 
 
 class MCTS(object):
@@ -100,7 +160,7 @@ class MCTS(object):
 		self.customer_number = customer_number
 		self.capacity = capacity
 
-		self.iteration = 10000
+		self.iteration = 100
 
 
 	def matrix_init(self,dual):
@@ -131,7 +191,9 @@ class MCTS(object):
 		root.dis = self.dis
 		root.demand = 0
 		root.capacity = self.capacity
-		root.max_children=50
+		root.max_children=100
+
+		dic = {}
 
 		for _ in range(self.iteration):
 			root.select()
@@ -149,7 +211,7 @@ class Node(object):
 		self.current_cost = 0
 
 		self.customers = customers
-		self.customer_list = set([i for i in range(1, len(customers))])
+		self.customer_list = set([i for i in range(len(customers))])
 		self.dis = dis
 		self.dual = dual
 		self.demand = None
@@ -216,9 +278,6 @@ class Node(object):
 		# generate a new child
 		new_child = Node(reachable, self.customers, self.rel_matrix, self.dual, self.dis, self.capacity)
 		new_child.father = self
-		new_child.dual = self.dual
-		new_child.dis = self.dis
-		new_child.rel_matrix = self.rel_matrix
 
 		new_child.tabu.update(self.tabu)
 		new_child.path = self.path + [reachable]
@@ -237,10 +296,11 @@ class Node(object):
 			new_child.visited_times += 1
 			new_child.backup()
 		else:
-			if len(new_child.path)>3:
-				new_child.rollout_bfs()
-			else:
-				new_child.rollout()
+			new_child.rollout_bfs()
+			# if len(new_child.path)>3:
+			# 	new_child.rollout_bfs()
+			# else:
+			# 	new_child.rollout()
 
 	def backup(self):
 		cur = self
@@ -275,8 +335,6 @@ class Node(object):
 		while queue:
 			path, path_set, current_customer,current_dis,current_time,current_cost,current_demand,current_tabu = queue.pop(0)
 			candidates = self.candidate_get(current_customer,path_set,current_tabu,current_demand,current_time)
-			if len(candidates)>1:
-				a = 10
 			for candidate in candidates:
 				can_path = path+[candidate]
 				can_set = set(can_path)
@@ -332,11 +390,11 @@ class Node(object):
 		self.best_quality_route = rollout_path[:]
 		self.backup()
 
-	def candidate_get(self,customer,selected_set,tabu,demand,time):
-		candidates = self.customer_list - tabu - selected_set
-		new_tabu = set([x for x in candidates if self.customers[x]['demand'] + demand > self.capacity and time + self.dis[customer, x] > self.customers[x]['end']])
+	def candidate_get(self,in_customer,in_selected_set,in_tabu,in_demand,in_time):
+		candidates = self.customer_list - in_tabu - in_selected_set
+		new_tabu = set([x for x in candidates if (self.customers[x]['demand'] + in_demand > self.capacity) or (in_time + self.dis[in_customer, x] > self.customers[x]['end'])])
 		candidates -= new_tabu
-		tabu.update(new_tabu)
+		in_tabu.update(new_tabu)
 		return candidates
 
 	def get_score(self):
@@ -493,7 +551,8 @@ class Solver(object):
 															  obj=self.routes[temp_length]['distance'])
 
 	def paths_generate(self, dual):
-		# self.population.evaluate(dual)
+		dual = [0] + dual + [0]
+		self.population.evaluate(dual)
 		self.mcts.matrix_init(dual)
 
 	# two ways to generate the path
@@ -502,11 +561,11 @@ class Solver(object):
 
 	def solve(self):
 
-		dual = self.linear_relaxition_solve()
+		dual_cur = self.linear_relaxition_solve()
 
 		best_reduced_cost = 1e6
 		while best_reduced_cost > -(1e-1):
-			paths = self.paths_generate(dual)
+			paths = self.paths_generate(dual_cur)
 
 
 if __name__ == '__main__':
@@ -514,6 +573,7 @@ if __name__ == '__main__':
 	# solver.solve()
 	# solver.paths_generate()
 	# exit()
+
 	# # test for mcts
 	dual = [30.46, 36.0, 44.72, 50.0, 41.24, 22.36, 42.42, 52.5, 64.04, 51.0, 67.08, 30.0, 22.36, 64.04, 60.82, 58.3,
 			60.82, 31.62, 64.04, 63.24, 36.06, 53.86, 72.12, 60.0, -9.77000000000001, 22.36, 10.0, 12.64, 59.66, 51.0,
@@ -533,6 +593,11 @@ if __name__ == '__main__':
 	for customer, info in customers.items():
 		info['tabu'].add(customer)
 	dual = [round(x,2) for x in dual]
+
+	pops = Population(customer_number,customers,dis,capacity)
+	exit()
+
+
 	t = time.time()
 	mcts = MCTS(dis, customers, capacity, customer_number)
 	mcts.matrix_init(dual)
