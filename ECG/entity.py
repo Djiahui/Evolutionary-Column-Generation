@@ -17,6 +17,7 @@ class Individual(object):
 		self.dis = dis
 
 		self.cost = 0
+		self.demand = 0
 
 	def evaluate_under_dual(self, dual):
 		for customer in self.path[:-1]:
@@ -69,6 +70,7 @@ class Population(object):
 		to_visit = customer_list[:]
 		routes = []
 		distances = []
+		demands = []
 		route = [0]
 		arrive_times_vectors = []
 		arrive_time_vector = [0]
@@ -94,6 +96,7 @@ class Population(object):
 					routes.append(route[:])
 					arrive_times_vectors.append(arrive_time_vector[:])
 					distances.append(temp_dis)
+					demands.append(temp_load)
 					route = [0]
 					arrive_time_vector = [0]
 					temp_dis = 0
@@ -108,46 +111,99 @@ class Population(object):
 			temp_dis += self.dis[route[-1], self.customer_num + 1]
 			route.append(self.customer_num + 1)
 			distances.append(temp_dis)
+			demands.append(temp_load)
 			routes.append(route)
 			arrive_times_vectors.append(arrive_time_vector[:])
 
-		for dis, path,arrive_time_vector in zip(distances, routes,arrive_times_vectors):
+		for dis, path,arrive_time_vector,demand in zip(distances, routes,arrive_times_vectors,demands):
 			self.pops.append(Individual(path, dis))
 			self.pops[-1].arrive_time_vector = arrive_time_vector
+			self.pops[-1].demand = demand
 
 	def evaluate(self, dual):
 		for pop in self.pops:
 			pop.evaluate_under_dual(dual)
 
-	def mutation(self,pop):
+	def mutation(self,pop,dual):
 		"""
 		:type pop:ECG.entity.Individual
 		:param pop: Individual
 		:return:
 		"""
+		dual = [0] + dual + [0]
 		n = len(pop.path)
 
 		index = random.randint(1,n-2)
+		index = 3
+		index_customer = pop.path[index]
 
-		before_index = index-1
-		after_index = index+1
-		total_demand = sum([self.customers[x]['demand'] for x in pop.path[:index]])
+		before_index, before_customer = index-1, pop.path[index-1]
+		after_index,after_customer = index+1, pop.path[index+1]
+		total_demand = pop.demand-self.customers[index_customer]['demand']
 
-		start_service_time = max(pop.arrive_time_vector[before_index],self.customers[before_index]['start'])
+		start_service_time = max(pop.arrive_time_vector[before_index],self.customers[before_customer]['start'])
+		departure_time = start_service_time + self.customers[before_customer]['service']
 
-		candidates = self.customers_set-self.customers[before_index]['tabu']-{index}
-		new_tabu = set([x for x in candidates if (total_demand+self.customers[x]['demand']>self.capacity) and (start_service_time+self.customers[before_index]+self.dis[before_index,x]>self.customers[x]['end'])])
-		candidates -= new_tabu
-
-		threshold = min([self.customers[x]['end']-pop.arrive_time_vector[x] for x in pop.path[index:]])
-
-		selected_customers = [x for x in candidates if max(start_service_time+self.customers[before_index]['service']+self.dis[before_index,x],self.customers[x]['start'])+self.customers[x]['service']+self.dis[x,after_index]<pop.arrive_time_vector[after_index]+threshold]
-
-		better_selected_customers = [x for x in selected_customers if self.dis[before_index,x]+self.dis[x,after_index]-self.dual[x]<self.dis[before_index,index]+self.dis[index,after_index]-self.dual[index]]
+		candidates = self.customers_set-self.customers[before_customer]['tabu']-set(pop.path[:-1])
+		new_candidates = set([x for x in candidates if (total_demand+self.customers[x]['demand']<self.capacity) and (departure_time+self.dis[before_customer,x]<self.customers[x]['end'])])
 
 
+		threshold = min([self.customers[x]['end']-arrivetime for x,arrivetime in zip(pop.path[after_index:],pop.arrive_time_vector[after_index:])])
+
+		def fea_deter(x):
+			return max(departure_time+self.dis[before_customer,x],self.customers[x]['start'])+self.customers[x]['service']+self.dis[x,after_customer]<pop.arrive_time_vector[after_index]+threshold
+		selected_customers = [x for x in new_candidates if fea_deter(x)]
+
+		final_select = None
+		final_improvement = 0
+		basic_cost = self.dis[before_customer,index_customer]+self.dis[index_customer,after_customer]-dual[index_customer]
+		for x in selected_customers:
+			if basic_cost - (self.dis[before_customer,x]+self.dis[x,after_customer]-dual[x])>final_improvement:
+				final_improvement = basic_cost - (self.dis[before_customer,x]+self.dis[x,after_customer]-dual[x])
+				final_select = x
+
+		if final_select:
+			new_path = pop.path[:index]+[final_select]+pop.path[index+1:]
+			pop.path = new_path
+			pop.cost -= final_improvement
+
+			# arrive time vector update
+
+			pop.arrive_time_vector = self.arrive_time_update(departure_time, pop.path[index:],pop.arrive_time_vector[:index],before_customer)
+
+	def arrive_time_update(self,departure,rest_customers,pre_arrivetime,pre_customer):
+		for cus in rest_customers:
+			temp_arrive = departure+self.dis[pre_customer,cus]
+			pre_arrivetime.append(temp_arrive)
+			departure = max(temp_arrive,self.customers[cus]['start']) + self.customers[cus]['service']
+			pre_customer = cus
+		return pre_arrivetime
 
 
+	def insert_operator(self, pop, dual):
+
+		dual = [0] + dual + [0]
+		index_customer = pop.path[-2]
+		total_demand = pop.demand
+
+		departure_time = max(pop.arrive_time_vector[-2],self.customers[index_customer]['start'])+self.customers[index_customer]['service']
+
+		candidates = self.customers_set - self.customers[index_customer]['tabu'] - set(pop.path)
+		new_candidates = set([x for x in candidates if (total_demand + self.customers[x]['demand'] < self.capacity) and ( departure_time + self.dis[index_customer, x] > self.customers[x]['end'])])
+		final_selected = None
+		final_improvement = 0
+		basic = self.dis[index_customer,pop.path[-1]]
+		for x in new_candidates:
+			if basic - (self.dis[index_customer,x]+self.dis[x,pop.path[-1]]-dual[x])>final_improvement:
+				final_improvement = basic - (self.dis[index_customer,x]+self.dis[x,pop.path[-1]]-dual[x])
+				final_selected = x
+
+		if final_selected:
+			new_path = pop.path[:-1] + [final_selected] + [pop.path[-1]]
+			pop.path = new_path
+			pop.cost -= final_improvement
+
+			pop.arrive_time_vector = self.arrive_time_update(departure_time,[final_selected,pop.path[-1]],pop.arrive_time_vector[:-1],index_customer)
 
 
 
@@ -595,6 +651,10 @@ if __name__ == '__main__':
 	dual = [round(x,2) for x in dual]
 
 	pops = Population(customer_number,customers,dis,capacity)
+	for pop in pops.pops:
+		if len(pop.path)==3:
+			# pops.mutation(pop,dual)
+			pops.insert_operator(pop,dual)
 	exit()
 
 
