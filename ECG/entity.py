@@ -134,7 +134,7 @@ class Population(object):
 		n = len(pop.path)
 
 		index = random.randint(1,n-2)
-		index = 3
+		index = n-2
 		index_customer = pop.path[index]
 
 		before_index, before_customer = index-1, pop.path[index-1]
@@ -143,16 +143,9 @@ class Population(object):
 
 		start_service_time = max(pop.arrive_time_vector[before_index],self.customers[before_customer]['start'])
 		departure_time = start_service_time + self.customers[before_customer]['service']
-
-		candidates = self.customers_set-self.customers[before_customer]['tabu']-set(pop.path[:-1])
-		new_candidates = set([x for x in candidates if (total_demand+self.customers[x]['demand']<self.capacity) and (departure_time+self.dis[before_customer,x]<self.customers[x]['end'])])
-
-
-		threshold = min([self.customers[x]['end']-arrivetime for x,arrivetime in zip(pop.path[after_index:],pop.arrive_time_vector[after_index:])])
-
-		def fea_deter(x):
-			return max(departure_time+self.dis[before_customer,x],self.customers[x]['start'])+self.customers[x]['service']+self.dis[x,after_customer]<pop.arrive_time_vector[after_index]+threshold
-		selected_customers = [x for x in new_candidates if fea_deter(x)]
+		selected_customers = self.feasible_customers_search(pop,before_customer,after_customer,total_demand,departure_time,after_index)
+		if not selected_customers:
+			return
 
 		final_select = None
 		final_improvement = 0
@@ -164,12 +157,31 @@ class Population(object):
 
 		if final_select:
 			new_path = pop.path[:index]+[final_select]+pop.path[index+1:]
-			pop.path = new_path
-			pop.cost -= final_improvement
+			new_cost = pop.cost-final_improvement
+			new_demand = pop.demand + (self.customers[final_select]['demand']-self.customers[index_customer]['demand'])
+			new_dis = pop.dis+ (self.dis[before_customer,final_select]+self.dis[final_select,after_customer]-self.dis[before_customer,index_customer]-self.dis[index_customer,after_customer])
 
-			# arrive time vector update
+			new_pop = Individual(new_path,new_dis)
+			new_pop.arrive_time_vector = self.arrive_time_update(departure_time, new_path[index:], pop.arrive_time_vector[:index], before_customer)
+			new_pop.demand = new_demand
+			new_pop.cost = new_cost
+			return new_pop
+		else:
+			return None
 
-			pop.arrive_time_vector = self.arrive_time_update(departure_time, pop.path[index:],pop.arrive_time_vector[:index],before_customer)
+	def feasible_customers_search(self,pop,before_customer,after_customer,total_demand,departure_time,after_index):
+			candidates = self.customers_set-self.customers[before_customer]['tabu']-set(pop.path)
+			new_candidates = set([x for x in candidates if (total_demand+self.customers[x]['demand']<self.capacity) and (departure_time+self.dis[before_customer,x]<self.customers[x]['end'])])
+			if not new_candidates:
+				return
+
+
+			threshold = min([self.customers[x]['end']-arrivetime for x,arrivetime in zip(pop.path[after_index:],pop.arrive_time_vector[after_index:])])
+
+			def fea_deter(x):
+				return max(departure_time+self.dis[before_customer,x],self.customers[x]['start'])+self.customers[x]['service']+self.dis[x,after_customer]<pop.arrive_time_vector[after_index]+threshold
+			selected_customers = [x for x in new_candidates if fea_deter(x)]
+			return selected_customers
 
 	def arrive_time_update(self,departure,rest_customers,pre_arrivetime,pre_customer):
 		for cus in rest_customers:
@@ -180,31 +192,40 @@ class Population(object):
 		return pre_arrivetime
 
 
-	def insert_operator(self, pop, dual):
+	def insert_operator(self, pop, dual,index=-1):
+		n = len(pop.path)
+		if index == -1:
+			index = random.randint(1,n-2)
 
 		dual = [0] + dual + [0]
-		index_customer = pop.path[-2]
+		before_index,after_index = index,index+1
+		before_customer,after_customer = pop.path[before_index], pop.path[after_index]
 		total_demand = pop.demand
 
-		departure_time = max(pop.arrive_time_vector[-2],self.customers[index_customer]['start'])+self.customers[index_customer]['service']
+		start_service_time = max(pop.arrive_time_vector[before_index], self.customers[before_customer]['start'])
+		departure_time = start_service_time + self.customers[before_customer]['service']
+		selected_customers = self.feasible_customers_search(pop,before_customer,after_customer,total_demand,departure_time,after_index)
+		if not selected_customers:
+			return
 
-		candidates = self.customers_set - self.customers[index_customer]['tabu'] - set(pop.path)
-		new_candidates = set([x for x in candidates if (total_demand + self.customers[x]['demand'] < self.capacity) and ( departure_time + self.dis[index_customer, x] > self.customers[x]['end'])])
 		final_selected = None
 		final_improvement = 0
-		basic = self.dis[index_customer,pop.path[-1]]
-		for x in new_candidates:
-			if basic - (self.dis[index_customer,x]+self.dis[x,pop.path[-1]]-dual[x])>final_improvement:
-				final_improvement = basic - (self.dis[index_customer,x]+self.dis[x,pop.path[-1]]-dual[x])
+		basic = self.dis[before_customer,after_customer]
+		for x in selected_customers:
+			if basic - (self.dis[before_customer,x]+self.dis[x,after_customer]-dual[x])>final_improvement:
+				final_improvement = basic - (self.dis[before_customer,x]+self.dis[x,after_customer]-dual[x])
 				final_selected = x
 
 		if final_selected:
-			new_path = pop.path[:-1] + [final_selected] + [pop.path[-1]]
-			pop.path = new_path
-			pop.cost -= final_improvement
+			new_path = pop.path[:index+1] + [final_selected] + pop.path[after_index:]
+			new_cost = pop.cost - final_improvement
+			new_demand = pop.demand + self.customers[final_selected]['demand']
+			new_dis = pop.dis + (self.dis[before_customer,final_selected]+self.dis[final_selected,after_customer]-self.dis[before_customer,after_customer])
 
-			pop.arrive_time_vector = self.arrive_time_update(departure_time,[final_selected,pop.path[-1]],pop.arrive_time_vector[:-1],index_customer)
-
+			new_pop = Individual(new_path,new_dis)
+			new_pop.cost = new_cost
+			new_pop.demand = new_demand
+			new_pop.arrive_time_vector = self.arrive_time_update(departure_time,new_path[after_index:],pop.arrive_time_vector[:before_index+1],before_customer)
 
 
 
@@ -649,12 +670,17 @@ if __name__ == '__main__':
 	for customer, info in customers.items():
 		info['tabu'].add(customer)
 	dual = [round(x,2) for x in dual]
-
+	t = time.time()
 	pops = Population(customer_number,customers,dis,capacity)
+	archive = []
 	for pop in pops.pops:
-		if len(pop.path)==3:
-			# pops.mutation(pop,dual)
-			pops.insert_operator(pop,dual)
+		if len(pop.path) <= 4:
+			temp = pops.insert_operator(pop,dual)
+		else:
+			temp = pops.mutation(pop,dual)
+		if temp:
+			archive.append(temp)
+	print(time.time()-t)
 	exit()
 
 
