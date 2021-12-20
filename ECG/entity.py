@@ -227,6 +227,9 @@ class Population(object):
 			new_pop.demand = new_demand
 			new_pop.arrive_time_vector = self.arrive_time_update(departure_time,new_path[after_index:],pop.arrive_time_vector[:before_index+1],before_customer)
 
+	def crossover(self):
+		pass
+
 
 
 class MCTS(object):
