@@ -40,7 +40,7 @@ class Population(object):
 
 		self.dual = None
 
-	def pt(self, path,dual):
+	def pt(self, path, dual):
 		dual = [0]+dual + [0]
 		cur = 0
 		dis_eva = 0
@@ -64,6 +64,27 @@ class Population(object):
 			print('wrong capacity')
 
 		print(dis_eva, cost_eva,arrive_time)
+
+	def path_eva(self, path, dual):
+		dual = [0]+dual + [0]
+		cur = 0
+		dis_eva = 0
+		cost_eva = 0
+		time_eva = 0
+		arrive_time = [0]
+		for cus in path:
+			arrive = time_eva+self.dis[cus,cur]
+			if arrive > self.customers[cus]['end']:
+				return None,None,None
+			else:
+				time_eva = max(arrive, self.customers[cus]['start']) + self.customers[cus][
+					'service']
+				arrive_time.append(arrive)
+				dis_eva += self.dis[cur, cus]
+				cost_eva += (self.dis[cur, cus] - dual[cur])
+			cur = cus
+
+		return dis_eva,cost_eva,arrive_time
 
 	def initial_routes_generates(self):
 		customer_list = [i for i in range(1, self.customer_num + 1)]
@@ -124,7 +145,7 @@ class Population(object):
 		for pop in self.pops:
 			pop.evaluate_under_dual(dual)
 
-	def mutation(self,pop,dual):
+	def mutation_operator(self,pop,dual):
 		"""
 		:type pop:ECG.entity.Individual
 		:param pop: Individual
@@ -227,8 +248,83 @@ class Population(object):
 			new_pop.demand = new_demand
 			new_pop.arrive_time_vector = self.arrive_time_update(departure_time,new_path[after_index:],pop.arrive_time_vector[:before_index+1],before_customer)
 
-	def crossover(self):
-		pass
+	def crossover(self,pop1,pop2,dual):
+		"""
+		:type pop1: Individual
+		:type pop2: Individual
+		:param pop1:
+		:param pop2:
+		:return:
+		"""
+		min_diff_1, demand_1 = self.data_pre(pop1)
+		min_diff_2, demand_2 = self.data_pre(pop2)
+		new_pop1 = self.crossover_operator(pop1,pop2,min_diff_2,demand_2,dual)
+		new_pop2 = self.crossover_operator(pop2,pop1,min_diff_1,demand_1,dual)
+
+		return new_pop1, new_pop2
+
+	def data_pre(self, pop):
+		"""
+		:type pop Individual
+		"""
+		n = len(pop.path)
+		min_diff = [0 for _ in range(n)]
+		demand = [0 for _ in range(n)]
+		for i in range(n-1,-1,-1):
+			min_diff[i] =  (self.customers[pop.path[i]]['end']-pop.arrive_time_vector[i]) if i == n-1 else (min(min_diff[i+1],self.customers[pop.path[i]]['end']-pop.arrive_time_vector[i]))
+			demand[i] = self.customers[pop.path[i]]['demand'] if i==n-1 else self.customers[pop.path[i]]['demand']+demand[i+1]
+		return min_diff,demand
+
+	def crossover_operator(self,pop1,pop2,min_diff_2,demand_2,dual,index = -1):
+		"""
+		:type pop1: Individual
+		:type pop2: Individual
+		"""
+		path_len = len(pop1.path)
+		if index == -1:
+			index = random.randint(1,path_len-2)
+		customer = pop1.path[index]
+		departure = max(pop1.arrive_time_vector[index],self.customers[customer]['start'])+self.customers[customer]['service']
+		total_demand = sum([self.customers[x]['demand'] for x in pop1.path[:index+1]])
+
+		n = len(pop2.path)
+		best_cost = 1e6
+		best_dis = None
+		best_arrive_time = None
+		best_path = None
+		best_demand = None
+		for after_index in range(n-2,0,-1):
+			if pop2.path[after_index] in pop1.path:
+				break
+			if total_demand+demand_2[after_index]<=self.capacity and departure + self.dis[customer,pop2.path[after_index]]<pop2.arrive_time_vector[after_index]+min_diff_2[after_index]:
+				new_dis,new_cost,new_arrive_time = self.path_eva(pop1.path[:index+1]+pop2.path[after_index:],dual)
+				if not new_arrive_time:
+					# review
+					print('wrong')
+				if new_cost<best_cost:
+					best_cost = new_cost
+					best_demand = total_demand + demand_2[after_index]
+					best_path = pop1.path[:index+1] + pop2.path[after_index:]
+					best_arrive_time = new_arrive_time
+					best_dis = new_dis
+			else:
+				# if this customer is infeasible, then customers before it are all infeasible
+				break
+
+
+		if best_path:
+			new_pop = Individual(best_path,best_dis)
+			new_pop.demand = best_demand
+			new_pop.arrive_time_vector = best_arrive_time
+			new_pop.cost = best_cost
+
+			return new_pop
+		else:
+			return None
+
+
+
+
 
 
 
@@ -677,12 +773,21 @@ if __name__ == '__main__':
 	pops = Population(customer_number,customers,dis,capacity)
 	archive = []
 	for pop in pops.pops:
-		if len(pop.path) <= 4:
-			temp = pops.insert_operator(pop,dual)
-		else:
-			temp = pops.mutation(pop,dual)
-		if temp:
-			archive.append(temp)
+		mu_pop = pops.mutation_operator(pop, dual)
+		in_pop = pops.insert_operator(pop, dual)
+		if mu_pop:
+			archive.append(mu_pop)
+		if in_pop:
+			archive.append(in_pop)
+	for _ in range(100):
+		#[0, 7, 13, 19, 6, 0]
+		#[0, 12, 22, 24, 77, 101]
+		s_pop1,s_pop2 = random.choices(pops.pops,k=2)
+		new_pop1,new_pop2 = pops.crossover(s_pop1,s_pop2,dual)
+		if new_pop1:
+			archive.append(new_pop1)
+		if new_pop2:
+			archive.append(new_pop2)
 	print(time.time()-t)
 	exit()
 
