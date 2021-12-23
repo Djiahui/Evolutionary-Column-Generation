@@ -40,8 +40,39 @@ class Population(object):
 
 		self.dual = None
 
+		self.crossover_num = 100
+		self.iteration_num = 10
+
+	def iteration(self,dual):
+		archive = []
+		for pop in self.pops:
+			mu_pop = self.mutation_operator(pop,dual)
+			in_pop = self.insert_operator(pop,dual)
+			if mu_pop:
+				archive.append(mu_pop)
+			if in_pop:
+				archive.append(in_pop)
+		for _ in range(self.crossover_num):
+			p_pop1,p_pop2 = random.choices(self.pops,k=2)
+			c_pop1, c_pop2 = self.crossover(p_pop1,p_pop2,dual)
+			if c_pop1:
+				archive.append(c_pop1)
+			if c_pop2:
+				archive.append(c_pop2)
+
+		return archive
+
+	def evolute(self):
+		for iter in range(self.iteration_num):
+			archive = self.iteration()
+			self.pops_update(archive)
+
+	def pops_update(self,archive):
+		pass
+
+
+
 	def pt(self, path, dual):
-		dual = [0]+dual + [0]
 		cur = 0
 		dis_eva = 0
 		cost_eva = 0
@@ -66,7 +97,6 @@ class Population(object):
 		print(dis_eva, cost_eva,arrive_time)
 
 	def path_eva(self, path, dual):
-		dual = [0]+dual + [0]
 		cur = 0
 		dis_eva = 0
 		cost_eva = 0
@@ -151,7 +181,6 @@ class Population(object):
 		:param pop: Individual
 		:return:
 		"""
-		dual = [0] + dual + [0]
 		n = len(pop.path)
 
 		index = random.randint(1,n-2)
@@ -218,7 +247,6 @@ class Population(object):
 		if index == -1:
 			index = random.randint(1,n-2)
 
-		dual = [0] + dual + [0]
 		before_index,after_index = index,index+1
 		before_customer,after_customer = pop.path[before_index], pop.path[after_index]
 		total_demand = pop.demand
@@ -340,7 +368,6 @@ class MCTS(object):
 
 
 	def matrix_init(self,dual):
-		dual = [0] + dual + [0]
 		self.rel_matrix = np.zeros((self.customer_number + 2, self.customer_number + 2))
 		customer_set = set([ i for i in range(1,self.customer_number+2)])
 		for customer, information in self.customers.items():
@@ -358,7 +385,6 @@ class MCTS(object):
 			self.rel_matrix[customer, list(information['tabu'])] = 0
 
 	def find_path(self, dual):
-		dual = [0] + dual + [0]
 		# MCTS_decoder
 		root = Node(0, self.customers, self.rel_matrix, dual, self.dis, self.capacity)
 
@@ -374,7 +400,7 @@ class MCTS(object):
 		for _ in range(self.iteration):
 			root.select()
 
-		return root.min_quality
+		return root.best_quality_route,root.min_quality
 
 
 
@@ -727,7 +753,6 @@ class Solver(object):
 															  obj=self.routes[temp_length]['distance'])
 
 	def paths_generate(self, dual):
-		dual = [0] + dual + [0]
 		self.population.evaluate(dual)
 		self.mcts.matrix_init(dual)
 
@@ -738,6 +763,7 @@ class Solver(object):
 	def solve(self):
 
 		dual_cur = self.linear_relaxition_solve()
+		dual_cur = [0] + dual_cur + [0]
 
 		best_reduced_cost = 1e6
 		while best_reduced_cost > -(1e-1):
