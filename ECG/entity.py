@@ -12,12 +12,19 @@ import random
 # 0 is not appear in path
 class Individual(object):
 	def __init__(self, path, dis):
+		# deterministic
 		self.path = path
 		self.arrive_time_vector = []
 		self.dis = dis
 
+		# non-deterministic
 		self.cost = 0
 		self.demand = 0
+
+		# for column generation
+		self.init_route = False
+		self.is_selected = False
+
 
 	def evaluate_under_dual(self, dual):
 		for customer in self.path[:-1]:
@@ -42,33 +49,38 @@ class Population(object):
 
 		self.crossover_num = 100
 		self.iteration_num = 10
+		self.max_num_childres = customer_num//2
 
 	def iteration(self,dual):
-		archive = []
+		temp_archive = []
 		for pop in self.pops:
 			mu_pop = self.mutation_operator(pop,dual)
 			in_pop = self.insert_operator(pop,dual)
 			if mu_pop:
-				archive.append(mu_pop)
+				temp_archive.append(mu_pop)
 			if in_pop:
-				archive.append(in_pop)
+				temp_archive.append(in_pop)
 		for _ in range(self.crossover_num):
 			p_pop1,p_pop2 = random.choices(self.pops,k=2)
 			c_pop1, c_pop2 = self.crossover(p_pop1,p_pop2,dual)
 			if c_pop1:
-				archive.append(c_pop1)
+				temp_archive.append(c_pop1)
 			if c_pop2:
-				archive.append(c_pop2)
+				temp_archive.append(c_pop2)
 
-		return archive
+		return temp_archive
 
-	def evolute(self):
+	def evolute(self, dual):
 		for iter in range(self.iteration_num):
-			archive = self.iteration()
+			archive = self.iteration(dual)
 			self.pops_update(archive)
 
-	def pops_update(self,archive):
-		pass
+
+	def pops_update(self, archive):
+		self.pops = self.pops+archive
+		self.pops.sort(key = lambda x:x.cost)
+		self.pops = self.pops[:self.max_num_childres]
+
 
 
 
@@ -154,7 +166,6 @@ class Population(object):
 					temp_load = 0
 					departure_time = 0
 
-
 			customer_list = to_visit[:]
 
 		if len(route) > 1:
@@ -174,6 +185,7 @@ class Population(object):
 	def evaluate(self, dual):
 		for pop in self.pops:
 			pop.evaluate_under_dual(dual)
+			pop.is_selected = True
 
 	def mutation_operator(self,pop,dual):
 		"""
@@ -184,7 +196,6 @@ class Population(object):
 		n = len(pop.path)
 
 		index = random.randint(1,n-2)
-		index = n-2
 		index_customer = pop.path[index]
 
 		before_index, before_customer = index-1, pop.path[index-1]
@@ -351,11 +362,6 @@ class Population(object):
 			return None
 
 
-
-
-
-
-
 class MCTS(object):
 	def __init__(self, dis, customers, capacity, customer_number):
 		self.pi = None
@@ -365,6 +371,26 @@ class MCTS(object):
 		self.capacity = capacity
 
 		self.iteration = 100
+
+	def path_eva(self, path, dual):
+		cur = 0
+		dis_eva = 0
+		cost_eva = 0
+		time_eva = 0
+		arrive_time = [0]
+		for cus in path:
+			arrive = time_eva+self.dis[cus,cur]
+			if arrive > self.customers[cus]['end']:
+				return None,None,None
+			else:
+				time_eva = max(arrive, self.customers[cus]['start']) + self.customers[cus][
+					'service']
+				arrive_time.append(arrive)
+				dis_eva += self.dis[cur, cus]
+				cost_eva += (self.dis[cur, cus] - dual[cur])
+			cur = cus
+
+		return dis_eva,cost_eva,arrive_time
 
 
 	def matrix_init(self,dual):
@@ -400,7 +426,11 @@ class MCTS(object):
 		for _ in range(self.iteration):
 			root.select()
 
-		return root.best_quality_route,root.min_quality
+		dis_eva,cost_eva,arrive_time_eva = self.path_eva(root.best_quality_route[1:],dual)
+		new_ind = Individual(root.best_quality_route,dis_eva)
+		new_ind.cost = cost_eva
+		new_ind.arrive_time_vector = arrive_time_eva
+		return new_ind
 
 
 
@@ -498,11 +528,9 @@ class Node(object):
 			new_child.visited_times += 1
 			new_child.backup()
 		else:
-			new_child.rollout_bfs()
-			# if len(new_child.path)>3:
-			# 	new_child.rollout_bfs()
-			# else:
-			# 	new_child.rollout()
+			new_child.rollout()
+
+			# new_child.rollout_bfs()
 
 	def backup(self):
 		cur = self
@@ -689,17 +717,91 @@ class Solver(object):
 	def set_cover(self):
 		self.rmp = gp.Model('rmp')
 		self.rmp.Params.logtoconsole = 0
+		mat = self.initial_routes_generates()
+		n = len(self.routes_archive)
+		self.x = []
+		for i in range(n):
+			name = 'x' + str(i)
+			self.x.append(self.rmp.addVar(ub=1,lb=0,obj = self.routes_archive[i].dis, name=name))
+			self.routes_archive[i].init_route = True
 
-		for i in range(self.customer_num):
-			index = i + 1
-			fea = self.path_eva_vrptw([index, self.customer_num + 1])
-			if not fea:
-				print('unfeasible', [index, self.customer_num])
-			self.routes[index]['var'] = self.rmp.addVar(ub=1, lb=0, obj=self.routes[index]['distance'], name='x')
-
-		cons = self.rmp.addConstrs(self.routes[index]['var'] == 1 for index in range(1, self.customer_num + 1))
-
+		self.rmp.addConstrs(gp.quicksum(mat[i, j]*self.x[j] for j in range(n))==1 for i in range(self.customer_num))
 		self.rmp.update()
+		# self.rmp.write('test.lp')
+
+
+		# for i in range(self.customer_num):
+		# 	index = i + 1
+		# 	fea = self.path_eva_vrptw([index, self.customer_num + 1])
+		# 	if not fea:
+		# 		print('unfeasible', [index, self.customer_num])
+		# 	self.routes[index]['var'] = self.rmp.addVar(ub=1, lb=0, obj=self.routes[index]['distance'], name='x')
+		#
+		# cons = self.rmp.addConstrs(self.routes[index]['var'] == 1 for index in range(1, self.customer_num + 1))
+		#
+		# self.rmp.update()
+
+	def initial_routes_generates(self):
+		customer_list = [i for i in range(1, self.customer_num + 1)]
+		to_visit = customer_list[:]
+		routes = []
+		distances = []
+		demands = []
+		route = [0]
+		arrive_times_vectors = []
+		arrive_time_vector = [0]
+		temp_load = 0
+		departure_time = 0
+		temp_dis = 0
+
+		# 从头遍历判断一个顾客顾客是否满足情况，如果满足的话就扣减，如果不符合情况就跳过（先判断是不是最后一个如果是最后一个认为一条路径完结）
+		while customer_list:
+			for customer in customer_list:
+				arrive_time = departure_time + self.dis[route[-1], customer]
+				if self.customers[customer]['demand'] + temp_load < self.capacity and arrive_time <= self.customers[customer]['end']:
+					arrive_time_vector.append(arrive_time)
+					departure_time = max(arrive_time, self.customers[customer]['start']) + self.customers[customer]['service']
+					temp_dis += self.dis[route[-1], customer]
+					temp_load = temp_load + self.customers[customer]['demand']
+					route.append(customer)
+					to_visit.remove(customer)
+				elif customer == customer_list[-1]:
+					arrive_time_vector.append(departure_time+self.dis[route[-1], self.customer_num + 1])
+					temp_dis += self.dis[route[-1], self.customer_num + 1]
+					route.append(self.customer_num + 1)
+					routes.append(route[:])
+					arrive_times_vectors.append(arrive_time_vector[:])
+					distances.append(temp_dis)
+					demands.append(temp_load)
+					route = [0]
+					arrive_time_vector = [0]
+					temp_dis = 0
+					temp_load = 0
+					departure_time = 0
+
+
+			customer_list = to_visit[:]
+
+		if len(route) > 1:
+			arrive_time_vector.append(departure_time + self.dis[route[-1], self.customer_num + 1])
+			temp_dis += self.dis[route[-1], self.customer_num + 1]
+			route.append(self.customer_num + 1)
+			distances.append(temp_dis)
+			demands.append(temp_load)
+			routes.append(route)
+			arrive_times_vectors.append(arrive_time_vector[:])
+
+		n = len(routes)
+		mat = np.zeros((self.customer_num, n))
+		self.routes_archive = []
+		for i in range(n):
+			self.routes_archive.append(Individual(routes[i], distances[i]))
+			self.routes_archive[-1].arrive_time_vector = arrive_times_vectors[i]
+			self.routes_archive[-1].demand = demands[i]
+			for cus in routes[i][1:-1]:
+				mat[cus - 1,i] = 1
+
+		return mat
 
 	def path_eva_vrptw(self, path):
 		cost = 0
@@ -755,26 +857,30 @@ class Solver(object):
 	def paths_generate(self, dual):
 		self.population.evaluate(dual)
 		self.mcts.matrix_init(dual)
+		new_ind = self.mcts.find_path(dual)
+		self.population.evolute(dual)
 
-	# two ways to generate the path
-	# 1.evolutionary operator 2.MCTS
-	# MCTS consider two factors: the customer number in current population, the dual, the negative information from population
+		return None
 
 	def solve(self):
 
 		dual_cur = self.linear_relaxition_solve()
 		dual_cur = [0] + dual_cur + [0]
-
 		best_reduced_cost = 1e6
 		while best_reduced_cost > -(1e-1):
+			vars = self.rmp.getVars()
+			n = len(vars)
+			self.population.pops = [self.routes_archive[i] for i in range(n) if vars[i].x > 1e-6]
 			paths = self.paths_generate(dual_cur)
+			# Now, the basic function is finished
+			# 1. domination rule in MCTS is needed 2. hwo many routes should be generated in MCTS 3. the detail of adding column
 
 
 if __name__ == '__main__':
-	# solver = Solver('../data/C101_200.csv', 100, 200)
-	# solver.solve()
-	# solver.paths_generate()
-	# exit()
+	solver = Solver('../data/C101_200.csv', 100, 200)
+	solver.solve()
+	solver.paths_generate()
+	exit()
 
 	# # test for mcts
 	dual = [30.46, 36.0, 44.72, 50.0, 41.24, 22.36, 42.42, 52.5, 64.04, 51.0, 67.08, 30.0, 22.36, 64.04, 60.82, 58.3,
