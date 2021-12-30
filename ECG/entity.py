@@ -843,22 +843,33 @@ class Solver(object):
 		dual = self.rmp.getAttr(GRB.Attr.Pi, self.rmp.getConstrs())
 		return dual
 
-	def add_column(self, routes):
-		for route in routes:
-			fea = self.path_eva_vrptw(route)
-			if not fea:
-				print('unfeasibile', route[1:])
-				continue
-			temp_length = len(self.routes)
-			added_column = gp.Column(self.routes[temp_length]['column'], self.rmp.getConstrs())
-			self.routes[temp_length]['var'] = self.rmp.addVar(column=added_column,
-															  obj=self.routes[temp_length]['distance'])
+	def add_column(self):
+		for ind in self.new_added_column:
+			column = [0 for _ in range(self.customer_num)]
+			for cus in ind.path[1:-1]:
+				column[cus-1] = 1
+			gp_column = gp.Column(column,self.rmp.getConstrs)
+			self.rmp.addVar(column = gp_column,obj = ind.dis,ub = 1,lb = 0)
+
+
+		# for route in routes:
+		# 	fea = self.path_eva_vrptw(route)
+		# 	if not fea:
+		# 		print('unfeasibile', route[1:])
+		# 		continue
+		# 	temp_length = len(self.routes)
+		# 	added_column = gp.Column(self.routes[temp_length]['column'], self.rmp.getConstrs())
+		# 	self.routes[temp_length]['var'] = self.rmp.addVar(column=added_column,
+		# 													  obj=self.routes[temp_length]['distance'])
 
 	def paths_generate(self, dual):
 		self.population.evaluate(dual)
 		self.mcts.matrix_init(dual)
 		new_ind = self.mcts.find_path(dual)
 		self.population.evolute(dual)
+
+		self.new_added_column += self.population.pops
+		self.new_added_column.append(new_ind)
 
 		return None
 
@@ -867,11 +878,26 @@ class Solver(object):
 		dual_cur = self.linear_relaxition_solve()
 		dual_cur = [0] + dual_cur + [0]
 		best_reduced_cost = 1e6
+
+		self.new_added_column = []
 		while best_reduced_cost > -(1e-1):
 			vars = self.rmp.getVars()
 			n = len(vars)
-			self.population.pops = [self.routes_archive[i] for i in range(n) if vars[i].x > 1e-6]
-			paths = self.paths_generate(dual_cur)
+			m = len(self.routes_archive)
+			self.population.pops = [self.routes_archive[i] for i in range(m) if vars[i].x > 1e-6]
+			self.new_added_column = [self.new_added_column[j] for j in range(n) if vars[j+m].x>1e-6]
+			self.population.pops += self.new_added_column
+
+			self.paths_generate(dual_cur)
+			self.add_column()
+
+			dual_cur = self.linear_relaxition_solve()
+		exit()
+
+
+
+
+
 			# Now, the basic function is finished
 			# 1. domination rule in MCTS is needed 2. hwo many routes should be generated in MCTS 3. the detail of adding column
 
