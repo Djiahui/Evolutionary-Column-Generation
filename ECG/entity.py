@@ -102,7 +102,7 @@ class Population(object):
 				dis_eva += self.dis[cur, cus]
 				cost_eva += (self.dis[cur, cus] - dual[cur])
 			cur = cus
-		demand = sum([customers[x]['demand'] for x in path[:-1]])
+		demand = sum([self.customers[x]['demand'] for x in path[:-1]])
 		if demand > self.capacity:
 			print('wrong capacity')
 
@@ -336,10 +336,16 @@ class Population(object):
 			if pop2.path[after_index] in pop1.path:
 				break
 			if total_demand+demand_2[after_index]<=self.capacity and departure + self.dis[customer,pop2.path[after_index]]<pop2.arrive_time_vector[after_index]+min_diff_2[after_index]:
-				new_dis,new_cost,new_arrive_time = self.path_eva(pop1.path[:index+1]+pop2.path[after_index:],dual)
+				temp_path = pop1.path[:index+1]+pop2.path[after_index:]
+				new_dis,new_cost,new_arrive_time = self.path_eva(temp_path[1:],dual)
 				if not new_arrive_time:
 					# review
 					print('wrong')
+					print(pop1.path)
+					print(pop2.path)
+					print(index)
+					print(after_index)
+					print(pop1.path[:index+1]+pop2.path[after_index:])
 				if new_cost<best_cost:
 					best_cost = new_cost
 					best_demand = total_demand + demand_2[after_index]
@@ -839,17 +845,22 @@ class Solver(object):
 		return fea
 
 	def linear_relaxition_solve(self):
-		self.rmp.optimize()
-		dual = self.rmp.getAttr(GRB.Attr.Pi, self.rmp.getConstrs())
+		self.new_rmp.optimize()
+		dual = self.new_rmp.getAttr(GRB.Attr.Pi, self.new_rmp.getConstrs())
 		return dual
 
 	def add_column(self):
+		self.new_rmp = self.rmp.copy()
+		count = 0
+		basic_num = len(self.routes_archive)
 		for ind in self.new_added_column:
 			column = [0 for _ in range(self.customer_num)]
 			for cus in ind.path[1:-1]:
 				column[cus-1] = 1
-			gp_column = gp.Column(column,self.rmp.getConstrs)
-			self.rmp.addVar(column = gp_column,obj = ind.dis,ub = 1,lb = 0)
+			gp_column = gp.Column(column,self.new_rmp.getConstrs())
+			name = 'x' + str(count+basic_num)
+			self.new_rmp.addVar(column = gp_column,obj = ind.dis,ub = 1,lb = 0,name=name)
+		self.new_rmp.update()
 
 
 		# for route in routes:
@@ -875,23 +886,29 @@ class Solver(object):
 
 	def solve(self):
 
+		self.new_rmp = self.rmp.copy()
 		dual_cur = self.linear_relaxition_solve()
-		dual_cur = [0] + dual_cur + [0]
+
 		best_reduced_cost = 1e6
 
 		self.new_added_column = []
 		while best_reduced_cost > -(1e-1):
-			vars = self.rmp.getVars()
+			dual_cur = [0] + dual_cur + [0]
+			print(dual_cur)
+
+			vars = self.new_rmp.getVars()
 			n = len(vars)
 			m = len(self.routes_archive)
 			self.population.pops = [self.routes_archive[i] for i in range(m) if vars[i].x > 1e-6]
-			self.new_added_column = [self.new_added_column[j] for j in range(n) if vars[j+m].x>1e-6]
+			self.new_added_column = [self.new_added_column[j-m] for j in range(m,n) if vars[j].x>1e-6]
 			self.population.pops += self.new_added_column
 
 			self.paths_generate(dual_cur)
 			self.add_column()
 
 			dual_cur = self.linear_relaxition_solve()
+			# the most important problem is LOCAL OPTIMUM
+
 		exit()
 
 
