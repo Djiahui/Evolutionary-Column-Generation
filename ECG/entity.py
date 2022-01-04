@@ -25,13 +25,24 @@ class Individual(object):
 		self.init_route = False
 		self.is_selected = False
 
+		# for debug
+		self.source = None
+		self.ppath = None
+
 
 	def evaluate_under_dual(self, dual):
+		self.cost = 0
 		for customer in self.path[:-1]:
-			self.cost += dual[customer]
+			self.cost -= dual[customer]
 
 		self.cost += self.dis
 
+	def __hash__(self):
+		self.cost = round(self.cost,2)
+		return hash(self.cost)
+
+	def __eq__(self, other):
+		return self.cost==other.cost
 
 
 class Population(object):
@@ -43,7 +54,7 @@ class Population(object):
 		self.dis = dis
 		self.capacity = capacity
 		self.customers_set = set([i for i in range(len(customers))])
-		self.initial_routes_generates()
+		# self.initial_routes_generates()
 
 		self.dual = None
 
@@ -70,16 +81,21 @@ class Population(object):
 
 		return temp_archive
 
-	def evolute(self, dual):
+	def evolution(self, dual):
 		for iter in range(self.iteration_num):
 			archive = self.iteration(dual)
 			self.pops_update(archive)
+			# print([x.path for x in archive])
 
 
 	def pops_update(self, archive):
 		self.pops = self.pops+archive
 		self.pops.sort(key = lambda x:x.cost)
-		self.pops = self.pops[:self.max_num_childres]
+
+		self.pops = list(set(self.pops))
+		if len(self.pops)>self.max_num_childres:
+			self.pops.sort(key=lambda x: x.cost)
+			self.pops = self.pops[:self.max_num_childres]
 
 
 
@@ -128,8 +144,11 @@ class Population(object):
 
 		return dis_eva,cost_eva,arrive_time
 
-	def initial_routes_generates(self):
+	def initial_routes_generates(self,dual=None):
 		customer_list = [i for i in range(1, self.customer_num + 1)]
+		if dual:
+			customer_list.sort(key=lambda x: -dual[x])
+		print(customer_list)
 		to_visit = customer_list[:]
 		routes = []
 		distances = []
@@ -226,6 +245,11 @@ class Population(object):
 			new_pop.arrive_time_vector = self.arrive_time_update(departure_time, new_path[index:], pop.arrive_time_vector[:index], before_customer)
 			new_pop.demand = new_demand
 			new_pop.cost = new_cost
+
+			# Todo
+			new_pop.source = 'mutation'
+			new_pop.ppath = pop.path
+
 			return new_pop
 		else:
 			return None
@@ -286,7 +310,12 @@ class Population(object):
 			new_pop.cost = new_cost
 			new_pop.demand = new_demand
 			new_pop.arrive_time_vector = self.arrive_time_update(departure_time,new_path[after_index:],pop.arrive_time_vector[:before_index+1],before_customer)
-
+			# Todo
+			new_pop.source = 'insert'
+			new_pop.ppath = pop.path
+			return new_pop
+		else:
+			return None
 	def crossover(self,pop1,pop2,dual):
 		"""
 		:type pop1: Individual
@@ -362,6 +391,10 @@ class Population(object):
 			new_pop.demand = best_demand
 			new_pop.arrive_time_vector = best_arrive_time
 			new_pop.cost = best_cost
+
+			# Todo
+			new_pop.source = 'crossover'
+			new_pop.ppath = pop1.path
 
 			return new_pop
 		else:
@@ -665,7 +698,7 @@ class Solver(object):
 		self.capacity = capacity
 		self.problem_csv()
 		self.pre_press()
-		self.set_cover()
+		self.set_cover_2()
 
 		self.population = Population(self.customer_num, self.customers, self.dis, self.capacity)
 		self.mcts = MCTS(self.dis, self.customers, self.capacity, self.customer_num)
@@ -735,17 +768,49 @@ class Solver(object):
 		self.rmp.update()
 		# self.rmp.write('test.lp')
 
+	def path_eva(self, path):
 
-		# for i in range(self.customer_num):
-		# 	index = i + 1
-		# 	fea = self.path_eva_vrptw([index, self.customer_num + 1])
-		# 	if not fea:
-		# 		print('unfeasible', [index, self.customer_num])
-		# 	self.routes[index]['var'] = self.rmp.addVar(ub=1, lb=0, obj=self.routes[index]['distance'], name='x')
-		#
-		# cons = self.rmp.addConstrs(self.routes[index]['var'] == 1 for index in range(1, self.customer_num + 1))
-		#
-		# self.rmp.update()
+		cur = 0
+		dis_eva = 0
+		demand_eva = 0
+		time_eva = 0
+		arrive_time = [0]
+		for cus in path:
+			arrive = time_eva+self.dis[cus,cur]
+			if arrive > self.customers[cus]['end']:
+				return None,None,None
+			else:
+				time_eva = max(arrive, self.customers[cus]['start']) + self.customers[cus][
+					'service']
+				arrive_time.append(arrive)
+				dis_eva += self.dis[cur, cus]
+				demand_eva += self.customers[cus]['demand']
+			cur = cus
+
+		return dis_eva,arrive_time
+
+	def set_cover_2(self):
+		self.rmp = gp.Model('rmp')
+		self.rmp.Params.logtoconsole = 0
+
+		self.routes_archive = []
+		self.x = []
+		for i in range(self.customer_num):
+			index = i + 1
+			temp_path = [0,i+1,self.customer_num+1]
+			temp_demand = self.customers[index]['demand']
+			temp_dis = self.dis[0,index] + self.dis[index,self.customer_num+1]
+			temp_arr = [0,self.dis[0,index],max(self.dis[0,index],self.customers[index]['start'])+self.customers[index]['service']+self.dis[index,self.customer_num+1]]
+
+			temp_ind = Individual(temp_path,temp_dis)
+			temp_ind.demand = temp_demand
+			temp_ind.arrive_time_vector = temp_arr
+			self.routes_archive.append(temp_ind)
+			name = 'x'+str(i)
+			self.x.append(self.rmp.addVar(ub = 1,lb = 0,obj = temp_dis,name = name))
+		cons = self.rmp.addConstrs(self.x[i] == 1 for i in range(self.customer_num))
+		self.rmp.update()
+		self.rmp.write('rmp.lp')
 
 	def initial_routes_generates(self):
 		customer_list = [i for i in range(1, self.customer_num + 1)]
@@ -860,6 +925,7 @@ class Solver(object):
 			gp_column = gp.Column(column,self.new_rmp.getConstrs())
 			name = 'x' + str(count+basic_num)
 			self.new_rmp.addVar(column = gp_column,obj = ind.dis,ub = 1,lb = 0,name=name)
+			count += 1
 		self.new_rmp.update()
 
 
@@ -874,36 +940,46 @@ class Solver(object):
 		# 													  obj=self.routes[temp_length]['distance'])
 
 	def paths_generate(self, dual):
-		self.population.evaluate(dual)
+		# mcts
 		self.mcts.matrix_init(dual)
 		new_ind = self.mcts.find_path(dual)
-		self.population.evolute(dual)
+
+		# evolutionary
+		self.population.initial_routes_generates(dual)
+		self.population.evaluate(dual)
+		self.population.evolution(dual)
 
 		self.new_added_column += self.population.pops
 		self.new_added_column.append(new_ind)
 
-		return None
+		self.population.pops = []
+
+		return min(new_ind.cost,self.new_added_column[0].cost)
 
 	def solve(self):
 
 		self.new_rmp = self.rmp.copy()
 		dual_cur = self.linear_relaxition_solve()
 
-		best_reduced_cost = 1e6
+		best_reduced_cost = -1e6
 
 		self.new_added_column = []
-		while best_reduced_cost > -(1e-1):
+		while best_reduced_cost < -(1e-1):
 			dual_cur = [0] + dual_cur + [0]
-			print(dual_cur)
 
 			vars = self.new_rmp.getVars()
+			# print([x.x for x in vars])
+			# print([x for x in dual_cur])
+			print(best_reduced_cost)
 			n = len(vars)
 			m = len(self.routes_archive)
-			self.population.pops = [self.routes_archive[i] for i in range(m) if vars[i].x > 1e-6]
+			# self.population.pops = [self.routes_archive[i] for i in range(m) if vars[i].x > 1e-6]
 			self.new_added_column = [self.new_added_column[j-m] for j in range(m,n) if vars[j].x>1e-6]
 			self.population.pops += self.new_added_column
 
-			self.paths_generate(dual_cur)
+			best_reduced_cost = self.paths_generate(dual_cur)
+			# the same customer appear in different route --- the route cannot be used
+
 			self.add_column()
 
 			dual_cur = self.linear_relaxition_solve()
@@ -944,27 +1020,13 @@ if __name__ == '__main__':
 	for customer, info in customers.items():
 		info['tabu'].add(customer)
 	dual = [round(x,2) for x in dual]
+	dual = [0] + dual + [0]
 	t = time.time()
 	pops = Population(customer_number,customers,dis,capacity)
-	archive = []
-	for pop in pops.pops:
-		mu_pop = pops.mutation_operator(pop, dual)
-		in_pop = pops.insert_operator(pop, dual)
-		if mu_pop:
-			archive.append(mu_pop)
-		if in_pop:
-			archive.append(in_pop)
-	for _ in range(100):
-		#[0, 7, 13, 19, 6, 0]
-		#[0, 12, 22, 24, 77, 101]
-		s_pop1,s_pop2 = random.choices(pops.pops,k=2)
-		new_pop1,new_pop2 = pops.crossover(s_pop1,s_pop2,dual)
-		if new_pop1:
-			archive.append(new_pop1)
-		if new_pop2:
-			archive.append(new_pop2)
-	print(time.time()-t)
+	pops.initial_routes_generates()
+	pops.evolution(dual)
 	exit()
+
 
 
 	t = time.time()
