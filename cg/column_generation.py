@@ -86,7 +86,7 @@ class Solver(object):
 			fea = self.path_eva_vrptw([index, self.num + 1])
 			if not fea:
 				print('unfeasible', [index, self.num])
-			self.routes[index]['var'] = self.rmp.addVar(ub=0, lb=0, obj=self.routes[index]['distance'], name='x')
+			self.routes[index]['var'] = self.rmp.addVar(ub=1, lb=0, obj=self.routes[index]['distance'])
 
 		cons = self.rmp.addConstrs(self.routes[index]['var'] == 1 for index in range(1, self.num + 1))
 
@@ -184,7 +184,7 @@ class Solver(object):
 		self.problem_csv()
 		self.pre_press()
 		self.set_cover()
-		self.initial_routes_generates()
+		# self.initial_routes_generates()
 
 	def step(self):
 		self.rmp.optimize()

@@ -72,6 +72,8 @@ class Population(object):
 	def iteration(self, dual):
 		temp_archive = []
 		temp = [x for x in self.pops if self.deter_in_tau(x)]
+		if not temp:
+			return temp_archive
 		for pop in temp:
 			mu_pop = self.mutation_operator(pop, dual)
 			in_pop = self.insert_operator(pop, dual)
@@ -90,18 +92,49 @@ class Population(object):
 		return temp_archive
 
 	def evolution(self, dual):
+		new_ind_archive = []
+		count = 0
 		self.tau = set()
-		for iter in range(self.iteration_num):
+		self.initial_routes_generates(dual)
+		self.evaluate(dual)
+
+		while self.pops or len(self.tau)<self.customer_num:
 			archive = self.iteration(dual)
 			self.pops_update(archive)
-			if iter and not iter%self.update_iter:
-				self.tau = set(self.pops[0].path)
+			count += 1
+			if not archive or count==self.update_iter:
+				self.tau.update(set(self.pops[0].path[1:-1]))
+				new_ind_archive.append(self.pops[0])
+				self.pops = list(filter(lambda x: self.deter_in_tau(x), self.pops))
+				self.initial_routes_generates(dual)
+				self.evaluate(dual)
+				count = 0
+				continue
+		return new_ind_archive
+
+
+		# for iter in range(self.iteration_num):
+		# 	archive = self.iteration(dual)
+		# 	if not archive:
+		# 		self.pops.sort(key = lambda x:x.cost)
+		# 		while self.pops:
+		# 			self.tau.update(set(self.pops[0].path[1:-1]))
+		# 			global_archive.append(self.pops[0])
+		# 			self.pops = list(filter(lambda x: self.deter_in_tau(x), self.pops))
+		# 		return global_archive
+		# 	self.pops_update(archive)
+		# 	if iter and not iter%self.update_iter:
+		# 		self.tau.update(set(self.pops[0].path[1:-1]))
+		# 		global_archive.append(self.pops[0])
+		# 		self.pops = list(filter(lambda x: self.deter_in_tau(x),self.pops))
+		# 		self.initial_routes_generates(dual)
+		# 		self.evaluate(dual)
+		# return global_archive
+
 		# print([x.path for x in archive])
 
 	def pops_update(self, archive):
 		self.pops = self.pops + archive
-		self.pops.sort(key=lambda x: x.cost)
-
 		self.pops = list(set(self.pops))
 		self.pops.sort(key=lambda x: x.cost)
 		if len(self.pops) > self.max_num_childres:
@@ -152,7 +185,7 @@ class Population(object):
 		return dis_eva, cost_eva, arrive_time
 
 	def initial_routes_generates(self, dual=None):
-		customer_list = [i for i in range(1, self.customer_num + 1)]
+		customer_list = [i for i in range(1, self.customer_num + 1) if not i in self.tau]
 		if dual:
 			customer_list.sort(key=lambda x: -dual[x])
 		to_visit = customer_list[:]
@@ -839,8 +872,8 @@ class Solver(object):
 			temp_ind.arrive_time_vector = temp_arr
 			self.routes_archive.append(temp_ind)
 			name = 'x' + str(i)
-			self.x.append(self.rmp.addVar(ub=1, lb=0, obj=temp_dis, name=name))
-		cons = self.rmp.addConstrs(self.x[i] == 1 for i in range(self.customer_num))
+			self.x.append(self.rmp.addVar(obj=temp_dis, name=name))
+		cons = self.rmp.addConstrs(self.x[i] >= 1 for i in range(self.customer_num))
 		self.rmp.update()
 		self.rmp.write('rmp.lp')
 
@@ -922,7 +955,8 @@ class Solver(object):
 				column[cus - 1] = 1
 			gp_column = gp.Column(column, self.new_rmp.getConstrs())
 			name = 'x' + str(count + basic_num)
-			self.new_rmp.addVar(column=gp_column, obj=ind.dis, ub=1, lb=0, name=name)
+			self.new_rmp.addVar(column=gp_column, obj=ind.dis, name=name)
+			# Attention! when the variable is bounded in a specific range, the reduced cost and the basis will effected
 			count += 1
 		self.new_rmp.update()
 
@@ -932,27 +966,31 @@ class Solver(object):
 		new_ind = self.mcts.find_path(dual)
 
 		# evolutionary
-		self.population.initial_routes_generates(dual)
-		self.population.evaluate(dual)
-		self.population.evolution(dual)
+		new_ind_archive = self.population.evolution(dual)
+		print([x.cost for x in new_ind_archive])
 
-		self.new_added_column += self.population.pops
+		for ind in self.new_added_column:
+			ind.evaluate_under_dual(dual)
+
+		print([x.cost for x in self.new_added_column])
+
+		self.new_added_column += new_ind_archive
 		self.new_added_column.append(new_ind)
 
 		self.population.pops = []
 
-		return min(new_ind.cost, self.new_added_column[0].cost)
+		return min(x.cost for x in self.new_added_column)
 
 	def solve(self):
 
 		self.new_rmp = self.rmp.copy()
-		dual_cur = self.linear_relaxition_solve()
+		dual = self.linear_relaxition_solve()
 
 		best_reduced_cost = -1e6
 
 		self.new_added_column = []
 		while best_reduced_cost < -(1e-1):
-			dual_cur = [0] + dual_cur + [0]
+			dual_cur = [0] + dual + [0]
 
 			vars = self.new_rmp.getVars()
 			print([x.x for x in vars])
@@ -962,6 +1000,10 @@ class Solver(object):
 			m = len(self.routes_archive)
 			# self.population.pops = [self.routes_archive[i] for i in range(m) if vars[i].x > 1e-6]
 			self.new_added_column = [self.new_added_column[j - m] for j in range(m, n) if vars[j].x > 1e-6]
+
+			temp_x = [x for x in vars if x.x>1e-6]
+			print([x.VBasis for x in temp_x])
+			print([x.RC for x in temp_x])
 			print(len(self.new_added_column))
 			self.population.pops += self.new_added_column
 
@@ -970,7 +1012,7 @@ class Solver(object):
 
 			self.add_column()
 
-			dual_cur = self.linear_relaxition_solve()
+			dual = self.linear_relaxition_solve()
 		# the most important problem is LOCAL OPTIMUM
 
 		exit()
