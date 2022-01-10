@@ -61,7 +61,7 @@ class Population(object):
 		self.crossover_num = 100
 		self.iteration_num = 10
 		self.max_num_childres = customer_num // 2
-		self.update_iter = 5
+		self.update_iter = 10
 
 	def deter_in_tau(self, pop):
 		for cus in pop.path[1:-1]:
@@ -105,6 +105,8 @@ class Population(object):
 			if not archive or count==self.update_iter:
 				self.tau.update(set(self.pops[0].path[1:-1]))
 				new_ind_archive.append(self.pops[0])
+				if len(new_ind_archive):
+					break
 				self.pops = list(filter(lambda x: self.deter_in_tau(x), self.pops))
 				self.initial_routes_generates(dual)
 				self.evaluate(dual)
@@ -967,12 +969,12 @@ class Solver(object):
 
 		# evolutionary
 		new_ind_archive = self.population.evolution(dual)
-		print([x.cost for x in new_ind_archive])
+		# print([x.cost for x in new_ind_archive])
 
 		for ind in self.new_added_column:
 			ind.evaluate_under_dual(dual)
 
-		print([x.cost for x in self.new_added_column])
+		# print([x.cost for x in self.new_added_column])
 
 		self.new_added_column += new_ind_archive
 		self.new_added_column.append(new_ind)
@@ -993,7 +995,9 @@ class Solver(object):
 			dual_cur = [0] + dual + [0]
 
 			vars = self.new_rmp.getVars()
+			print('the value of variable')
 			print([x.x for x in vars])
+			print('the value of dual variable')
 			print([x for x in dual_cur])
 			print(best_reduced_cost)
 			n = len(vars)
@@ -1001,10 +1005,8 @@ class Solver(object):
 			# self.population.pops = [self.routes_archive[i] for i in range(m) if vars[i].x > 1e-6]
 			self.new_added_column = [self.new_added_column[j - m] for j in range(m, n) if vars[j].x > 1e-6]
 
-			temp_x = [x for x in vars if x.x>1e-6]
-			print([x.VBasis for x in temp_x])
-			print([x.RC for x in temp_x])
-			print(len(self.new_added_column))
+			# temp_x = [x for x in vars if x.x>1e-6]
+			# print(len(self.new_added_column))
 			self.population.pops += self.new_added_column
 
 			best_reduced_cost = self.paths_generate(dual_cur)
