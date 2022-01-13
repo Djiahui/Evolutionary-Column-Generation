@@ -119,27 +119,6 @@ class Population(object):
 		# 		continue
 		# return new_ind_archive
 
-
-		# for iter in range(self.iteration_num):
-		# 	archive = self.iteration(dual)
-		# 	if not archive:
-		# 		self.pops.sort(key = lambda x:x.cost)
-		# 		while self.pops:
-		# 			self.tau.update(set(self.pops[0].path[1:-1]))
-		# 			global_archive.append(self.pops[0])
-		# 			self.pops = list(filter(lambda x: self.deter_in_tau(x), self.pops))
-		# 		return global_archive
-		# 	self.pops_update(archive)
-		# 	if iter and not iter%self.update_iter:
-		# 		self.tau.update(set(self.pops[0].path[1:-1]))
-		# 		global_archive.append(self.pops[0])
-		# 		self.pops = list(filter(lambda x: self.deter_in_tau(x),self.pops))
-		# 		self.initial_routes_generates(dual)
-		# 		self.evaluate(dual)
-		# return global_archive
-
-		# print([x.path for x in archive])
-
 	def pops_update(self, archive):
 		self.pops = self.pops + archive
 		self.pops = list(set(self.pops))
@@ -477,7 +456,7 @@ class MCTS(object):
 		self.customer_number = customer_number
 		self.capacity = capacity
 
-		self.iteration = 100
+		self.iteration = 10000
 
 	def path_eva(self, path, dual):
 		cur = 0
@@ -625,14 +604,20 @@ class Node(object):
 		new_child.capacity = self.capacity
 		self.children.append(new_child)
 
-		if new_child.current == len(self.customers) - 1:
+		temp_len = len(self.customers)
+		if new_child.current == temp_len - 1:
 			new_child.quality = new_child.current_dis
 			new_child.best_quality_route = new_child.path
 			new_child.state = 'terminal'
 			new_child.visited_times += 1
 			new_child.backup()
 		else:
-			new_child.rollout()
+			if new_child.current_time > 0.6 * self.customers[temp_len-1]['end']:
+				new_child.rollout_bfs()
+				new_child.state = 'terminal'
+				print('succ')
+			else:
+				new_child.rollout()
 
 		# new_child.rollout_bfs()
 
