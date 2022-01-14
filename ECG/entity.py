@@ -496,7 +496,6 @@ class MCTS(object):
 			self.rel_matrix[customer, list(information['tabu'])] = 0
 
 	def find_path(self, dual):
-		# MCTS_decoder
 		root = Node(0, self.customers, self.rel_matrix, dual, self.dis, self.capacity)
 
 		root.path.append(0)
@@ -624,7 +623,7 @@ class Node(object):
 	def backup(self):
 		cur = self
 		while cur.father:
-			# Todo there is a problem, the min/max quality
+
 			cur.father.min_quality = min(cur.father.min_quality, cur.quality)
 			cur.father.max_quality = max(cur.father.max_quality, cur.quality)
 

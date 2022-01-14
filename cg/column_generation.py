@@ -291,6 +291,7 @@ def main(path,num):
 
 	objs, paths = labeling_Algoithm_vrptw.labeling_algorithm(dual, solver.dis, solver.customers, solver.capacity, solver.num)
 	print(time.time()-t)
+	exit()
 
 	# plot(paths[0],solver.customers)
 	while objs[0] < -(1e-1):
