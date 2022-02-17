@@ -1,2 +1,2 @@
 # l2p 
-mcts test
+mcts test test
