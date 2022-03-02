@@ -319,4 +319,4 @@ def main(path,num):
 
 
 if __name__ == '__main__':
-	main('../data/C101_200.csv', 100)
+	main('../data/R101_200.csv', 100)

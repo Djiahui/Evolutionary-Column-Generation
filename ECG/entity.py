@@ -582,7 +582,8 @@ class Node(object):
 				self.children[selected_index].backup()
 			else:
 				self.children[selected_index].select()
-
+			print('this iteration is select')
+			print(self.children[selected_index].path)
 	def expand(self, reachable_customers):
 
 		p = self.softmax(self.rel_matrix[self.current, list(reachable_customers)])
@@ -603,6 +604,9 @@ class Node(object):
 		new_child.capacity = self.capacity
 		self.children.append(new_child)
 
+		print('current path')
+		print(new_child.path)
+
 		temp_len = len(self.customers)
 		if new_child.current == temp_len - 1:
 			new_child.quality = new_child.current_dis
@@ -611,10 +615,11 @@ class Node(object):
 			new_child.visited_times += 1
 			new_child.backup()
 		else:
-			if new_child.current_time > 0.6 * self.customers[temp_len-1]['end']:
+			if new_child.current_time > 0.5 * self.customers[temp_len-1]['end']:
 				new_child.rollout_bfs()
 				new_child.state = 'terminal'
-				print('succ')
+				print('succ+bfspath')
+				print(new_child.best_quality_route)
 			else:
 				new_child.rollout()
 
@@ -726,12 +731,10 @@ class Node(object):
 			# only one children node for father thus only one choice
 			return 1
 
-		return math.sqrt(
-			(math.log(self.father.visited_times) / self.visited_times))
+		# return math.sqrt(
+		# 	(math.log(self.father.visited_times) / self.visited_times))
 
-	# return -(self.quality - self.father.min_quality) / (self.father.max_quality - self.father.min_quality) + \
-	# 	   self.rel_matrix[self.father.current, self.current] + self.c * math.sqrt(
-	# 	(math.log(self.father.visited_times) / self.visited_times))
+		return -(self.quality - self.father.min_quality) / (self.father.max_quality - self.father.min_quality) + self.rel_matrix[self.father.current, self.current] + self.c * math.sqrt((math.log(self.father.visited_times) / self.visited_times))
 
 	def softmax(self, x):
 		return np.exp(x) / np.sum(np.exp(x), axis=0)
@@ -1003,7 +1006,7 @@ class Solver(object):
 			dual = self.linear_relaxition_solve()
 
 if __name__ == '__main__':
-	solver = Solver('../data/C101_200.csv', 100, 200)
+	solver = Solver('../data/R101_200.csv', 100, 200)
 	solver.solve()
 	solver.paths_generate()
 	exit()
