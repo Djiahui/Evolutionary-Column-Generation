@@ -534,12 +534,15 @@ class Node(object):
 		self.selected = set()
 
 		self.children = []
+		self.children_num = 0
 		self.father = None
 		self.max_children = 100
 
-		self.c = 2
+		self.c = 1
 
-		self.state = None
+		self.state = 0
+		self.terminal_child = 0
+		self.fully_expanded = False
 
 		self.quality = 1e6
 		self.max_quality = -1e6
@@ -576,12 +579,21 @@ class Node(object):
 		reachable_customers = self.candidate_get(self.current, self.selected, self.tabu, self.demand, self.current_time)
 		if len(self.children) < self.max_children and len(reachable_customers) > 0:
 			self.expand(reachable_customers)
+			self.children_num += 1
 		else:
+			self.fully_expanded = True
+			# self.children.sort(key = lambda x:x.current)
+			# debug = {child.current:child.get_score2() for child in self.children}
+			# temp = [(key,value[0],value[1],value[2]) for key, value in debug.items()]
+
 			selected_index = np.argmax(list(map(lambda x: x.get_score(), self.children)))
-			if self.children[selected_index].state == 'terminal':
+			if self.children[selected_index].state == 1:
+				self.children[selected_index].visited_times += 1
 				self.children[selected_index].backup()
 			else:
 				self.children[selected_index].select()
+
+
 			print('this iteration is select')
 			print(self.children[selected_index].path)
 	def expand(self, reachable_customers):
@@ -604,20 +616,20 @@ class Node(object):
 		new_child.capacity = self.capacity
 		self.children.append(new_child)
 
-		print('current path')
+		print('current path is expand')
 		print(new_child.path)
 
 		temp_len = len(self.customers)
 		if new_child.current == temp_len - 1:
 			new_child.quality = new_child.current_dis
 			new_child.best_quality_route = new_child.path
-			new_child.state = 'terminal'
+			new_child.state = '1'
 			new_child.visited_times += 1
 			new_child.backup()
 		else:
 			if new_child.current_time > 0.5 * self.customers[temp_len-1]['end']:
 				new_child.rollout_bfs()
-				new_child.state = 'terminal'
+
 				print('succ+bfspath')
 				print(new_child.best_quality_route)
 			else:
@@ -627,12 +639,18 @@ class Node(object):
 
 	def backup(self):
 		cur = self
+		if self.state:
+			cur.father.terminal_child += 1
 		while cur.father:
 
 			cur.father.min_quality = min(cur.father.min_quality, cur.quality)
 			cur.father.max_quality = max(cur.father.max_quality, cur.quality)
 
 			cur.father.visited_times += 1
+			if self.father.fully_expanded and self.father.terminal_child == self.father.children_num:
+				self.father.state = 1
+				a = 10
+
 
 			if cur.quality < cur.father.quality:
 				cur.father.quality = cur.quality
@@ -681,6 +699,7 @@ class Node(object):
 		self.quality = best_cost
 		self.visited_times += 1
 		self.best_quality_route = best_path
+		self.state = 1
 		self.backup()
 
 	def rollout(self):
@@ -727,6 +746,9 @@ class Node(object):
 	def get_score(self):
 		if not self.visited_times:
 			a = 0
+
+		if self.fully_expanded and self.terminal_child == self.children_num:
+			return -1e6
 		if self.father.min_quality == self.father.max_quality:
 			# only one children node for father thus only one choice
 			return 1
@@ -734,7 +756,14 @@ class Node(object):
 		# return math.sqrt(
 		# 	(math.log(self.father.visited_times) / self.visited_times))
 
-		return -(self.quality - self.father.min_quality) / (self.father.max_quality - self.father.min_quality) + self.rel_matrix[self.father.current, self.current] + self.c * math.sqrt((math.log(self.father.visited_times) / self.visited_times))
+		return -(self.quality - self.father.min_quality) / (self.father.max_quality - self.father.min_quality) + 0.5*random.random()*self.rel_matrix[self.father.current, self.current] + self.c * math.sqrt((math.log(self.father.visited_times) / self.visited_times))
+		# return -(self.quality - self.father.min_quality) / (self.father.max_quality - self.father.min_quality) + self.c * math.sqrt((math.log(self.father.visited_times) / self.visited_times))
+
+	def get_score2(self):
+		if self.father.min_quality == self.father.max_quality:
+			return 1,1,1
+		else:
+			return -(self.quality - self.father.min_quality) / (self.father.max_quality - self.father.min_quality),self.rel_matrix[self.father.current, self.current],self.c * math.sqrt((math.log(self.father.visited_times) / self.visited_times))
 
 	def softmax(self, x):
 		return np.exp(x) / np.sum(np.exp(x), axis=0)
@@ -958,6 +987,7 @@ class Solver(object):
 		# mcts
 		self.mcts.matrix_init(dual)
 		new_ind = self.mcts.find_path(dual)
+		return new_ind.cost
 
 		# evolutionary
 		self.population.evolution(dual)
