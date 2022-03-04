@@ -8,7 +8,7 @@ import copy
 import numpy as np
 import pickle
 import random
-
+import matplotlib.pyplot as plt
 
 # 0 is not appear in path
 class Individual(object):
@@ -456,7 +456,7 @@ class MCTS(object):
 		self.customer_number = customer_number
 		self.capacity = capacity
 
-		self.iteration = 10000
+		self.iteration = 5000
 
 	def path_eva(self, path, dual):
 		cur = 0
@@ -506,9 +506,15 @@ class MCTS(object):
 		root.max_children = 100
 
 		dic = {}
+		temp = []
 
 		for _ in range(self.iteration):
 			root.select()
+			temp.append(root.quality)
+
+		plt.plot(range(len(temp)),temp)
+		plt.show()
+		exit()
 
 		dis_eva, cost_eva, arrive_time_eva = self.path_eva(root.best_quality_route[1:], dual)
 		new_ind = Individual(root.best_quality_route, dis_eva)
@@ -538,11 +544,12 @@ class Node(object):
 		self.father = None
 		self.max_children = 100
 
-		self.c = 1
+		self.c = 2
 
 		self.state = 0
 		self.terminal_child = 0
 		self.fully_expanded = False
+		self.father_changed = False
 
 		self.quality = 1e6
 		self.max_quality = -1e6
@@ -578,24 +585,26 @@ class Node(object):
 	def select(self):
 		reachable_customers = self.candidate_get(self.current, self.selected, self.tabu, self.demand, self.current_time)
 		if len(self.children) < self.max_children and len(reachable_customers) > 0:
+			if self.children_num>len(reachable_customers) and self.terminal_child == self.children_num:
+				self.rollout_bfs()
+				return
+
+			if len(self.children)+1 >= self.max_children or len(reachable_customers)-1 <= 0:
+				self.fully_expanded = True
 			self.expand(reachable_customers)
-			self.children_num += 1
 		else:
 			self.fully_expanded = True
-			# self.children.sort(key = lambda x:x.current)
-			# debug = {child.current:child.get_score2() for child in self.children}
-			# temp = [(key,value[0],value[1],value[2]) for key, value in debug.items()]
+			# only a node executes the select procedure, it can be identified as state=1, thus their may exists that a terminal node is select
 
 			selected_index = np.argmax(list(map(lambda x: x.get_score(), self.children)))
 			if self.children[selected_index].state == 1:
+				print('select a terminal child')
+				print(list(map(lambda x: x.get_score(), self.children)))
 				self.children[selected_index].visited_times += 1
 				self.children[selected_index].backup()
 			else:
 				self.children[selected_index].select()
 
-
-			print('this iteration is select')
-			print(self.children[selected_index].path)
 	def expand(self, reachable_customers):
 
 		p = self.softmax(self.rel_matrix[self.current, list(reachable_customers)])
@@ -615,23 +624,19 @@ class Node(object):
 		new_child.demand = self.demand + self.customers[reachable]['demand']
 		new_child.capacity = self.capacity
 		self.children.append(new_child)
-
-		print('current path is expand')
-		print(new_child.path)
+		self.children_num += 1
 
 		temp_len = len(self.customers)
 		if new_child.current == temp_len - 1:
 			new_child.quality = new_child.current_dis
 			new_child.best_quality_route = new_child.path
-			new_child.state = '1'
+			new_child.state = 1
 			new_child.visited_times += 1
+			new_child.fully_expanded = True
 			new_child.backup()
 		else:
 			if new_child.current_time > 0.5 * self.customers[temp_len-1]['end']:
 				new_child.rollout_bfs()
-
-				print('succ+bfspath')
-				print(new_child.best_quality_route)
 			else:
 				new_child.rollout()
 
@@ -639,17 +644,18 @@ class Node(object):
 
 	def backup(self):
 		cur = self
-		if self.state:
-			cur.father.terminal_child += 1
 		while cur.father:
 
 			cur.father.min_quality = min(cur.father.min_quality, cur.quality)
 			cur.father.max_quality = max(cur.father.max_quality, cur.quality)
 
 			cur.father.visited_times += 1
-			if self.father.fully_expanded and self.father.terminal_child == self.father.children_num:
-				self.father.state = 1
-				a = 10
+			if cur.state and not cur.father_changed:
+				cur.father.terminal_child += 1
+				cur.father_changed = True
+				if cur.father.fully_expanded and cur.father.terminal_child == cur.father.children_num:
+					cur.father.state = 1
+					a = 10
 
 
 			if cur.quality < cur.father.quality:
@@ -700,6 +706,7 @@ class Node(object):
 		self.visited_times += 1
 		self.best_quality_route = best_path
 		self.state = 1
+		self.fully_expanded = True
 		self.backup()
 
 	def rollout(self):
@@ -747,7 +754,7 @@ class Node(object):
 		if not self.visited_times:
 			a = 0
 
-		if self.fully_expanded and self.terminal_child == self.children_num:
+		if self.state:
 			return -1e6
 		if self.father.min_quality == self.father.max_quality:
 			# only one children node for father thus only one choice
@@ -985,9 +992,12 @@ class Solver(object):
 
 	def paths_generate(self, dual):
 		# mcts
+
 		self.mcts.matrix_init(dual)
 		new_ind = self.mcts.find_path(dual)
-		return new_ind.cost
+		self.new_added_column.append(new_ind)
+
+
 
 		# evolutionary
 		self.population.evolution(dual)
@@ -999,7 +1009,7 @@ class Solver(object):
 		# print([x.cost for x in self.new_added_column])
 
 		self.new_added_column += self.population.pops
-		self.new_added_column.append(new_ind)
+		# self.new_added_column.append(new_ind)
 
 		self.population.pops = []
 

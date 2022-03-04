@@ -70,8 +70,8 @@ def labeling_algorithm(pi, dis, customers, capacity, customer_number):
             print('hh')
             continue
         count += 1
-        if not count%100:
-            print(count)
+        # if not count%100:
+        #     print(count)
 
 
 
