@@ -110,13 +110,16 @@ def labeling_algorithm(pi, dis, customers, capacity, customer_number):
     final_labels = path_dic[customer_number + 1]
     min_cost = 100000
     best_label = None
+    final_labels.sort(key = lambda x:x.dis)
+
     for label in final_labels:
         if label.dis < min_cost:
             min_cost = label.dis
             best_label = label
 
+    return [x.dis for x in final_labels[:50]],[x.path[1:] for x in final_labels[:50]]
 
-    return [best_label.dis], [best_label.path[1:]]
+    # return [best_label.dis], [best_label.path[1:]]
 
 if __name__ == '__main__':
     import pickle

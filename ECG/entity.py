@@ -25,10 +25,12 @@ class Individual(object):
 		# for column generation
 		self.init_route = False
 		self.is_selected = False
+		self.age = 10
 
 		# for debug
 		self.source = None
 		self.ppath = None
+
 
 	def evaluate_under_dual(self, dual):
 		self.cost = 0
@@ -973,7 +975,8 @@ class Solver(object):
 	def linear_relaxition_solve(self):
 		self.new_rmp.optimize()
 		dual = self.new_rmp.getAttr(GRB.Attr.Pi, self.new_rmp.getConstrs())
-		return dual
+		obj = self.new_rmp.ObjVal
+		return dual,obj
 
 	def add_column(self):
 		self.new_rmp = self.rmp.copy()
@@ -993,9 +996,9 @@ class Solver(object):
 	def paths_generate(self, dual):
 		# mcts
 
-		self.mcts.matrix_init(dual)
-		new_ind = self.mcts.find_path(dual)
-		self.new_added_column.append(new_ind)
+		# self.mcts.matrix_init(dual)
+		# new_ind = self.mcts.find_path(dual)
+		# self.new_added_column.append(new_ind)
 
 
 
@@ -1016,39 +1019,68 @@ class Solver(object):
 		return min(x.cost for x in self.new_added_column)
 
 	def solve(self):
+		t = time.time()
 
 		self.new_rmp = self.rmp.copy()
-		dual = self.linear_relaxition_solve()
+		dual,obj = self.linear_relaxition_solve()
 
 		best_reduced_cost = -1e6
 
 		self.new_added_column = []
+
+		obj_list = []
 		while best_reduced_cost < -(1e-1):
 			dual_cur = [0] + dual + [0]
 
 			vars = self.new_rmp.getVars()
-			print('the value of variable')
-			print([x.x for x in vars])
-			print('the value of dual variable')
-			print([x for x in dual_cur])
-			print(best_reduced_cost)
+			# print('the value of variable')
+			# print([x.x for x in vars])
+			# print('the value of dual variable')
+			# print([round(x,2) for x in dual_cur])
+			# print(best_reduced_cost)
+			# print(obj)
 			n = len(vars)
 			m = len(self.routes_archive)
-			# self.population.pops = [self.routes_archive[i] for i in range(m) if vars[i].x > 1e-6]
-			self.new_added_column = [self.new_added_column[j - m] for j in range(m, n) if vars[j].x > 1e-6]
-			self.population.pops += self.new_added_column
+			temp = []
+			for j in range(m,n):
+				self.new_added_column[j-m].age -= 1
+				if self.new_added_column[j-m].age or vars[j].x>1e-6:
+					temp.append(self.new_added_column[j-m])
+					if vars[j].x>1e-6:
+						self.population.pops.append(self.new_added_column[j-m])
+			print(len(temp))
+			self.new_added_column = temp
 
 			best_reduced_cost = self.paths_generate(dual_cur)
 			# the same customer appear in different route --- the route cannot be used
 
 			self.add_column()
 
-			dual = self.linear_relaxition_solve()
+			dual, obj = self.linear_relaxition_solve()
+			obj_list.append(obj)
+			if len(obj_list)>5 and round(obj_list[-5],2)-round(obj,2)<1e-6:
+				break
+		vars =  self.new_rmp.getVars()
+		for var in vars:
+			var.vtype = GRB.BINARY
+		self.new_rmp.update()
+		self.new_rmp.optimize()
+
+		n = len(vars)
+		m = len(self.routes_archive)
+
+		for j in range(m,n):
+			if vars[j].x>1e-6:
+				print(self.new_added_column[j-m].path)
+		print(self.new_rmp.ObjVal)
+		print(time.time()-t)
+
+
+
 
 if __name__ == '__main__':
-	solver = Solver('../data/R101_200.csv', 100, 200)
+	solver = Solver('../data/R102_200.csv', 100, 200)
 	solver.solve()
-	solver.paths_generate()
 	exit()
 
 	# # test for mcts

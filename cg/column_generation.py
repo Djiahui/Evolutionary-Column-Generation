@@ -283,22 +283,22 @@ def plot(path, customers):
 
 
 def main(path,num):
+	t = time.time()
 	solver = Solver(path,num)
 	solver.start()
 	dual = solver.step()
 
-	t = time.time()
+
 
 	objs, paths = labeling_Algoithm_vrptw.labeling_algorithm(dual, solver.dis, solver.customers, solver.capacity, solver.num)
-	print(time.time()-t)
-	exit()
+
 
 	# plot(paths[0],solver.customers)
 	while objs[0] < -(1e-1):
 		solver.add_column(paths)
 		dual = solver.step()
 		objs, paths = labeling_Algoithm_vrptw.labeling_algorithm(dual, solver.dis, solver.customers, solver.capacity, solver.num)
-		print(objs[0])
+		# print(objs[0])
 
 
 	for key in solver.routes.keys():
@@ -316,7 +316,7 @@ def main(path,num):
 	temp.sort()
 	print(temp)
 	print(solver.rmp.objval)
-
+	print(time.time() - t)
 
 if __name__ == '__main__':
 	main('../data/R101_200.csv', 100)
