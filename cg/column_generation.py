@@ -1,3 +1,5 @@
+import csv
+import os
 import time
 
 import gurobipy as gp
@@ -13,7 +15,7 @@ import copy
 
 
 class Solver(object):
-	def __init__(self,path,num):
+	def __init__(self,path,num,capacity):
 		self.customers = {}
 		self.num = num
 		self.customer_num = num
@@ -22,7 +24,7 @@ class Solver(object):
 		self.routes = {}
 		self.rmp = None
 
-		self.capacity = 200
+		self.capacity = capacity
 
 
 
@@ -193,7 +195,7 @@ class Solver(object):
 
 	def add_column(self,routes):
 		for route in routes:
-			fea = self.path_eva_vrptw(route)
+			fea = self.path_eva_vrptw(route[1:])
 			if not fea:
 				print('unfeasibile', route[1:])
 				continue
@@ -282,9 +284,9 @@ def plot(path, customers):
 
 
 
-def main(path,num):
+def main(path,num,cap):
 	t = time.time()
-	solver = Solver(path,num)
+	solver = Solver(path,num,cap)
 	solver.start()
 	dual = solver.step()
 
@@ -298,7 +300,7 @@ def main(path,num):
 		solver.add_column(paths)
 		dual = solver.step()
 		objs, paths = labeling_Algoithm_vrptw.labeling_algorithm(dual, solver.dis, solver.customers, solver.capacity, solver.num)
-		# print(objs[0])
+		print(objs[0])
 
 
 	for key in solver.routes.keys():
@@ -308,15 +310,28 @@ def main(path,num):
 
 	solver.rmp.update()
 	solver.rmp.optimize()
-	temp = []
-	for key in solver.routes.keys():
-		if solver.routes[key]['var'].x > 0:
-			print(solver.routes[key]['route'])
-			temp += solver.routes[key]['route'][:-1]
-	temp.sort()
-	print(temp)
-	print(solver.rmp.objval)
-	print(time.time() - t)
+	# temp = []
+	# for key in solver.routes.keys():
+	# 	if solver.routes[key]['var'].x > 0:
+	# 		print(solver.routes[key]['route'])
+	# 		temp += solver.routes[key]['route'][:-1]
+	# temp.sort()
+	# print(temp)
+	return solver.rmp.objval,time.time()-t
+
 
 if __name__ == '__main__':
-	main('../data/R101_200.csv', 100)
+	with open('result.csv','w',newline='') as ff:
+		wrtt = csv.writer(ff)
+		for problem in os.listdir('../data'):
+			temp = problem.split('.')[0].split('_')
+			cap = int(temp[1])
+			num = int(temp[-1])
+			if problem[0] == 'C':
+				obj,tt= main('../data/'+problem,num,cap)
+			wrtt.writerow([problem,obj,tt])
+			print(problem,obj,tt)
+
+
+
+

@@ -11,6 +11,9 @@ import random
 import matplotlib.pyplot as plt
 
 # 0 is not appear in path
+from cg import labeling_Algoithm_vrptw
+
+
 class Individual(object):
 	def __init__(self, path, dis):
 		# deterministic
@@ -312,6 +315,9 @@ class Population(object):
 	def arrive_time_update(self, departure, rest_customers, pre_arrivetime, pre_customer):
 		for cus in rest_customers:
 			temp_arrive = departure + self.dis[pre_customer, cus]
+			if temp_arrive>self.customers[cus]['end']:
+				print('wrong')
+				a = 10
 			pre_arrivetime.append(temp_arrive)
 			departure = max(temp_arrive, self.customers[cus]['start']) + self.customers[cus]['service']
 			pre_customer = cus
@@ -418,13 +424,16 @@ class Population(object):
 				temp_path = pop1.path[:index + 1] + pop2.path[after_index:]
 				new_dis, new_cost, new_arrive_time = self.path_eva(temp_path[1:], dual)
 				if not new_arrive_time:
-					# review
+					# Todo review
 					print('wrong')
 					print(pop1.path)
+					print(pop1.arrive_time_vector)
 					print(pop2.path)
+					print(pop2.arrive_time_vector)
 					print(index)
 					print(after_index)
 					print(pop1.path[:index + 1] + pop2.path[after_index:])
+					break
 				if new_cost < best_cost:
 					best_cost = new_cost
 					best_demand = total_demand + demand_2[after_index]
@@ -1019,6 +1028,8 @@ class Solver(object):
 		return min(x.cost for x in self.new_added_column)
 
 	def solve(self):
+		flag = False
+		mode = True
 		t = time.time()
 
 		self.new_rmp = self.rmp.copy()
@@ -1046,20 +1057,41 @@ class Solver(object):
 				self.new_added_column[j-m].age -= 1
 				if self.new_added_column[j-m].age or vars[j].x>1e-6:
 					temp.append(self.new_added_column[j-m])
-					if vars[j].x>1e-6:
+					if vars[j].x>1e-6 and not flag:
 						self.population.pops.append(self.new_added_column[j-m])
-			print(len(temp))
+			# print(len(temp))
 			self.new_added_column = temp
+			if mode:
+				if not flag:
+					best_reduced_cost = self.paths_generate(dual_cur)
+					self.add_column()
 
-			best_reduced_cost = self.paths_generate(dual_cur)
-			# the same customer appear in different route --- the route cannot be used
+					dual, obj = self.linear_relaxition_solve()
+					obj_list.append(obj)
+					if len(obj_list)>5 and round(obj_list[-5],2)-round(obj,2)<1e-6:
+						flag = True
+				else:
+					new_objs, new_paths = labeling_Algoithm_vrptw.labeling_algorithm(dual, self.dis, self.customers, self.capacity, self.customer_num)
+					for path in new_paths:
+						dis_eva, cost_eva, arrive_time = self.population.path_eva(path[1:],dual_cur)
+						self.new_added_column.append(Individual(path,dis))
+						self.new_added_column[-1].arrive_time_vector = arrive_time
+						self.new_added_column[-1].demand = sum([self.customers[x]['demand'] for x in path[1:-1]])
+						self.new_added_column[-1].cost = cost_eva
+					self.add_column()
+					dual,obj = self.linear_relaxition_solve()
+					obj_list.append(obj)
+			else:
+				best_reduced_cost = self.paths_generate(dual_cur)
+				self.add_column()
 
-			self.add_column()
+				dual, obj = self.linear_relaxition_solve()
+				obj_list.append(obj)
+				if len(obj_list) > 5 and round(obj_list[-5], 2) - round(obj, 2) < 1e-6:
+					break
 
-			dual, obj = self.linear_relaxition_solve()
-			obj_list.append(obj)
-			if len(obj_list)>5 and round(obj_list[-5],2)-round(obj,2)<1e-6:
-				break
+
+
 		vars =  self.new_rmp.getVars()
 		for var in vars:
 			var.vtype = GRB.BINARY
@@ -1069,17 +1101,16 @@ class Solver(object):
 		n = len(vars)
 		m = len(self.routes_archive)
 
-		for j in range(m,n):
-			if vars[j].x>1e-6:
-				print(self.new_added_column[j-m].path)
-		print(self.new_rmp.ObjVal)
-		print(time.time()-t)
+		# for j in range(m,n):
+		# 	if vars[j].x>1e-6:
+		# 		print(self.new_added_column[j-m].path)
+		return self.new_rmp.ObjVal,time.time()-t
 
 
 
 
 if __name__ == '__main__':
-	solver = Solver('../data/R102_200.csv', 100, 200)
+	solver = Solver('../data/C102_200_100.csv', 100, 200)
 	solver.solve()
 	exit()
 
