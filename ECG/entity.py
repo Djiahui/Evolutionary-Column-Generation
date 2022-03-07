@@ -233,6 +233,9 @@ class Population(object):
 			self.pops[-1].arrive_time_vector = arrive_time_vector
 			self.pops[-1].demand = demand
 
+
+
+
 	def evaluate(self, dual):
 		for pop in self.pops:
 			pop.evaluate_under_dual(dual)
@@ -279,14 +282,17 @@ class Population(object):
 					before_customer, index_customer] - self.dis[index_customer, after_customer])
 
 			new_pop = Individual(new_path, new_dis)
-			new_pop.arrive_time_vector = self.arrive_time_update(departure_time, new_path[index:],
-																 pop.arrive_time_vector[:index], before_customer)
+			_,_, new_pop.arrive_time_vector = self.path_eva(new_pop.path[1:],dual)
+			if not new_pop.arrive_time_vector:
+				a = 0
+			# new_pop.arrive_time_vector = self.arrive_time_update(departure_time, new_path[index:],
+			# 													 pop.arrive_time_vector[:index], before_customer)
 			new_pop.demand = new_demand
 			new_pop.cost = new_cost
 
 			# Todo
 			new_pop.source = 'mutation'
-			new_pop.ppath = pop.path
+			new_pop.parent = pop
 
 			return new_pop
 		else:
@@ -358,12 +364,15 @@ class Population(object):
 			new_pop = Individual(new_path, new_dis)
 			new_pop.cost = new_cost
 			new_pop.demand = new_demand
-			new_pop.arrive_time_vector = self.arrive_time_update(departure_time, new_path[after_index:],
-																 pop.arrive_time_vector[:before_index + 1],
-																 before_customer)
+			_,_,new_pop.arrive_time_vector = self.path_eva(new_pop.path[1:],dual)
+			if not new_pop.arrive_time_vector:
+				a = 0
+			# new_pop.arrive_time_vector = self.arrive_time_update(departure_time, new_path[after_index:],
+			# 													 pop.arrive_time_vector[:before_index + 1],
+			# 													 before_customer)
 			# Todo
 			new_pop.source = 'insert'
-			new_pop.ppath = pop.path
+			new_pop.parent = pop
 			return new_pop
 		else:
 			return None
@@ -433,6 +442,11 @@ class Population(object):
 					print(index)
 					print(after_index)
 					print(pop1.path[:index + 1] + pop2.path[after_index:])
+					print(pop1.source)
+					print(pop2.source)
+					random_number = random.random()
+					with open('temp'+str(round(random_number,4)),'wb') as pkl:
+						pickle.dump([pop1,pop2],pkl)
 					break
 				if new_cost < best_cost:
 					best_cost = new_cost
@@ -452,7 +466,7 @@ class Population(object):
 
 			# Todo
 			new_pop.source = 'crossover'
-			new_pop.ppath = pop1.path
+			new_pop.parent = [pop1,pop2]
 
 			return new_pop
 		else:
@@ -1027,9 +1041,8 @@ class Solver(object):
 
 		return min(x.cost for x in self.new_added_column)
 
-	def solve(self):
+	def solve(self,mode):
 		flag = False
-		mode = True
 		t = time.time()
 
 		self.new_rmp = self.rmp.copy()
@@ -1074,7 +1087,7 @@ class Solver(object):
 					new_objs, new_paths = labeling_Algoithm_vrptw.labeling_algorithm(dual, self.dis, self.customers, self.capacity, self.customer_num)
 					for path in new_paths:
 						dis_eva, cost_eva, arrive_time = self.population.path_eva(path[1:],dual_cur)
-						self.new_added_column.append(Individual(path,dis))
+						self.new_added_column.append(Individual(path,dis_eva))
 						self.new_added_column[-1].arrive_time_vector = arrive_time
 						self.new_added_column[-1].demand = sum([self.customers[x]['demand'] for x in path[1:-1]])
 						self.new_added_column[-1].cost = cost_eva
@@ -1110,8 +1123,16 @@ class Solver(object):
 
 
 if __name__ == '__main__':
-	solver = Solver('../data/C102_200_100.csv', 100, 200)
-	solver.solve()
+	solver = Solver('../data/C206_700_100.csv', 100, 700)
+	# solver.solve(False)
+
+	temp1 = [0, 20, 22, 24, 27, 30, 29, 31, 33, 38, 39, 36, 34, 28, 26, 23, 18, 19, 16, 14, 12, 13, 17, 25, 9, 10, 8, 21, 101]
+	temp2 = [0, 67, 63, 74, 62, 61, 72, 66, 64, 68, 65, 49, 55, 54, 53, 58, 60, 56, 57, 40, 46, 45, 52, 51, 50, 42, 41, 48, 101]
+	dual = [0 for _ in range(101)]
+	solver.population.pt(temp1[1:],dual)
+	solver.population.pt(temp2[1:], dual)
+	temp3 = [0, 20, 22, 24, 27, 30, 29, 72, 66, 64, 68, 65, 49, 55, 54, 53, 58, 60, 56, 57, 40, 46, 45, 52, 51, 50, 42, 41, 48, 101]
+	solver.path_eva(temp3)
 	exit()
 
 	# # test for mcts

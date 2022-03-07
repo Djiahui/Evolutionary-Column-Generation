@@ -6,17 +6,19 @@ def main(path):
     temp = path.split('.')[0].split('_')
     cap = int(temp[1])
     num = int(temp[-1])
-    objs = []
-    times = []
     with open('result.csv', 'a+', newline='') as f:
+        print(path)
         wrt = csv.writer(f)
         objs = []
         times = []
-        for _ in range(1):
+        for _ in range(10):
+            print(_)
             slover = entity.Solver('../data/'+path,num,cap)
-            obj,time = slover.solve()
+            obj,time = slover.solve(False)
             objs.append(obj)
             times.append(time)
+
+            del slover
 
 
 
@@ -30,11 +32,12 @@ def multi_process_fun(path):
     num = int(temp[-1])
     objs = []
     times = []
-    for _ in range(5):
+    for _ in range(10):
         slover = entity.Solver('../data/' + path, num, cap)
-        obj, time = slover.solve()
+        obj, time = slover.solve(False)
         objs.append(obj)
         times.append(time)
+    print(path+'-----done')
     return path,objs,times
 
 
@@ -42,7 +45,7 @@ def multi_process_fun(path):
 
 if __name__ == '__main__':
     for problem in os.listdir('../data'):
-        if problem[0] == 'C':
+        if problem[:2] == 'R1':
             main(problem)
     exit(0)
 
@@ -50,7 +53,7 @@ if __name__ == '__main__':
     pool = Pool(10)
     process_result = []
     for problem in os.listdir('../data'):
-        if problem[0] == 'C':
+        if problem[:2] == 'R1':
             print(problem)
             process_result.append(pool.apply_async(multi_process_fun,(problem,)))
     pool.close()
