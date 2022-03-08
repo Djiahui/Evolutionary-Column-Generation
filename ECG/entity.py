@@ -28,7 +28,7 @@ class Individual(object):
 		# for column generation
 		self.init_route = False
 		self.is_selected = False
-		self.age = 10
+		self.age = 5
 
 		# for debug
 		self.source = None
@@ -64,7 +64,7 @@ class Population(object):
 		self.dual = None
 
 		self.crossover_num = 100
-		self.iteration_num = 10
+		self.iteration_num = customer_num // 4
 		self.max_num_childres = customer_num // 2
 		self.update_iter = 10
 		self.max_num_append = 5
@@ -162,7 +162,7 @@ class Population(object):
 		time_eva = 0
 		arrive_time = [0]
 		for cus in path:
-			arrive = time_eva + self.dis[cus, cur]
+			arrive = round(time_eva + self.dis[cus, cur], 2)
 			if arrive > self.customers[cus]['end']:
 				return None, None, None
 			else:
@@ -193,7 +193,7 @@ class Population(object):
 		# 从头遍历判断一个顾客顾客是否满足情况，如果满足的话就扣减，如果不符合情况就跳过（先判断是不是最后一个如果是最后一个认为一条路径完结）
 		while customer_list:
 			for customer in customer_list:
-				arrive_time = departure_time + self.dis[route[-1], customer]
+				arrive_time = round(departure_time + self.dis[route[-1], customer],2)
 				if self.customers[customer]['demand'] + temp_load < self.capacity and arrive_time <= \
 						self.customers[customer]['end']:
 					arrive_time_vector.append(arrive_time)
@@ -204,7 +204,7 @@ class Population(object):
 					route.append(customer)
 					to_visit.remove(customer)
 				elif customer == customer_list[-1]:
-					arrive_time_vector.append(departure_time + self.dis[route[-1], self.customer_num + 1])
+					arrive_time_vector.append(round(departure_time + self.dis[route[-1], self.customer_num + 1],2))
 					temp_dis += self.dis[route[-1], self.customer_num + 1]
 					route.append(self.customer_num + 1)
 					routes.append(route[:])
@@ -220,7 +220,7 @@ class Population(object):
 			customer_list = to_visit[:]
 
 		if len(route) > 1:
-			arrive_time_vector.append(departure_time + self.dis[route[-1], self.customer_num + 1])
+			arrive_time_vector.append(round(departure_time + self.dis[route[-1], self.customer_num + 1],2))
 			temp_dis += self.dis[route[-1], self.customer_num + 1]
 			route.append(self.customer_num + 1)
 			distances.append(temp_dis)
@@ -282,11 +282,11 @@ class Population(object):
 					before_customer, index_customer] - self.dis[index_customer, after_customer])
 
 			new_pop = Individual(new_path, new_dis)
-			_,_, new_pop.arrive_time_vector = self.path_eva(new_pop.path[1:],dual)
-			if not new_pop.arrive_time_vector:
-				a = 0
-			# new_pop.arrive_time_vector = self.arrive_time_update(departure_time, new_path[index:],
-			# 													 pop.arrive_time_vector[:index], before_customer)
+			# _,_, new_pop.arrive_time_vector = self.path_eva(new_pop.path[1:],dual)
+			# if not new_pop.arrive_time_vector:
+			# 	a = 0
+			new_pop.arrive_time_vector = self.arrive_time_update(departure_time, new_path[index:],
+																 pop.arrive_time_vector[:index], before_customer)
 			new_pop.demand = new_demand
 			new_pop.cost = new_cost
 
@@ -320,7 +320,7 @@ class Population(object):
 
 	def arrive_time_update(self, departure, rest_customers, pre_arrivetime, pre_customer):
 		for cus in rest_customers:
-			temp_arrive = departure + self.dis[pre_customer, cus]
+			temp_arrive = round(departure + self.dis[pre_customer, cus],2)
 			if temp_arrive>self.customers[cus]['end']:
 				print('wrong')
 				a = 10
@@ -364,12 +364,12 @@ class Population(object):
 			new_pop = Individual(new_path, new_dis)
 			new_pop.cost = new_cost
 			new_pop.demand = new_demand
-			_,_,new_pop.arrive_time_vector = self.path_eva(new_pop.path[1:],dual)
-			if not new_pop.arrive_time_vector:
-				a = 0
-			# new_pop.arrive_time_vector = self.arrive_time_update(departure_time, new_path[after_index:],
-			# 													 pop.arrive_time_vector[:before_index + 1],
-			# 													 before_customer)
+			# _,_,new_pop.arrive_time_vector = self.path_eva(new_pop.path[1:],dual)
+			# if not new_pop.arrive_time_vector:
+			# 	a = 0
+			new_pop.arrive_time_vector = self.arrive_time_update(departure_time, new_path[after_index:],
+																 pop.arrive_time_vector[:before_index + 1],
+																 before_customer)
 			# Todo
 			new_pop.source = 'insert'
 			new_pop.parent = pop
@@ -894,12 +894,20 @@ class Solver(object):
 		time_eva = 0
 		arrive_time = [0]
 		for cus in path:
-			arrive = time_eva + self.dis[cus, cur]
+			arrive = round(time_eva + self.dis[cus, cur],2)
 			if arrive > self.customers[cus]['end']:
-				return None, None, None
+				if round(arrive,2)>self.customers[cus]['end']:
+					return None, None, None
+				else:
+					arrive = round(arrive,2)
+					time_eva = max(arrive, self.customers[cus]['start']) + self.customers[cus][
+						'service']
+					arrive_time.append(arrive)
+					dis_eva += self.dis[cur, cus]
+					demand_eva += self.customers[cus]['demand']
 			else:
-				time_eva = max(arrive, self.customers[cus]['start']) + self.customers[cus][
-					'service']
+				time_eva = round(max(arrive, self.customers[cus]['start']) + self.customers[cus][
+					'service'],2)
 				arrive_time.append(arrive)
 				dis_eva += self.dis[cur, cus]
 				demand_eva += self.customers[cus]['demand']
@@ -1053,6 +1061,7 @@ class Solver(object):
 		self.new_added_column = []
 
 		obj_list = []
+		itera = 0
 		while best_reduced_cost < -(1e-1):
 			dual_cur = [0] + dual + [0]
 
@@ -1095,13 +1104,19 @@ class Solver(object):
 					dual,obj = self.linear_relaxition_solve()
 					obj_list.append(obj)
 			else:
+				if not itera%10:
+					pass
+
 				best_reduced_cost = self.paths_generate(dual_cur)
+
+
 				self.add_column()
 
 				dual, obj = self.linear_relaxition_solve()
 				obj_list.append(obj)
 				if len(obj_list) > 5 and round(obj_list[-5], 2) - round(obj, 2) < 1e-6:
 					break
+				itera += 1
 
 
 
@@ -1123,15 +1138,15 @@ class Solver(object):
 
 
 if __name__ == '__main__':
-	solver = Solver('../data/C206_700_100.csv', 100, 700)
-	# solver.solve(False)
+	solver = Solver('../data/R104_200_100.csv', 100, 700)
+	solver.solve(False)
 
-	temp1 = [0, 20, 22, 24, 27, 30, 29, 31, 33, 38, 39, 36, 34, 28, 26, 23, 18, 19, 16, 14, 12, 13, 17, 25, 9, 10, 8, 21, 101]
-	temp2 = [0, 67, 63, 74, 62, 61, 72, 66, 64, 68, 65, 49, 55, 54, 53, 58, 60, 56, 57, 40, 46, 45, 52, 51, 50, 42, 41, 48, 101]
+	temp1 = [0, 59, 93, 85, 44, 38, 14, 43, 42, 57, 2, 58, 101]
+	temp2 = [0, 52, 88, 7, 48, 82, 8, 46, 45, 83, 60, 5, 6, 101]
 	dual = [0 for _ in range(101)]
 	solver.population.pt(temp1[1:],dual)
 	solver.population.pt(temp2[1:], dual)
-	temp3 = [0, 20, 22, 24, 27, 30, 29, 72, 66, 64, 68, 65, 49, 55, 54, 53, 58, 60, 56, 57, 40, 46, 45, 52, 51, 50, 42, 41, 48, 101]
+	temp3 = [0, 59, 93, 48, 82, 8, 46, 45, 83, 60, 5, 6, 101]
 	solver.path_eva(temp3)
 	exit()
 

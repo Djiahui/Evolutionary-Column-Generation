@@ -171,6 +171,7 @@ class ESPPRC:
             customer.labels = []
         to_be_extended = deque([self.depot_label()])
         while to_be_extended:
+            print(len(to_be_extended))
             from_label = to_be_extended.popleft()
             # if a label becomes dominated after being pushed in the queue,
             # label.dominated becomes true and it can be skipped
@@ -260,8 +261,8 @@ def t(pi, dis, customers, capacity, customer_number):
 
 
     routes = temp_cls.solve()
-
-    return routes[0].cost,list(map(lambda x:x.index,routes[0].path))[1:-1]+[customer_number+1]
+    return [x.cost for x in routes[:10]],[[y.index for y in x.path]+[customer_number+1] for x in routes[:10]]
+    # [routes[0].cost],[list(map(lambda x:x.index,routes[0].path))[1:-1]+[customer_number+1]]
 
 
 

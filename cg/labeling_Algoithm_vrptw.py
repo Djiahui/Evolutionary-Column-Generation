@@ -63,6 +63,7 @@ def labeling_algorithm(pi, dis, customers, capacity, customer_number):
     path_dic = {}
     path_dic[customer_number+1] = []
     count = 0
+    it = 0
     while len(queue) > 0:
 
         current = queue.pop(0)
@@ -70,6 +71,9 @@ def labeling_algorithm(pi, dis, customers, capacity, customer_number):
             print('hh')
             continue
         count += 1
+        it += 1
+        if not it%500:
+            print(it)
         # if not count%100:
         #     print(count)
 

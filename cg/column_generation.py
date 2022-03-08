@@ -12,6 +12,7 @@ import labeling_Algoithm_vrptw
 import pickle
 
 import copy
+from others.labeling_approach import t
 
 
 class Solver(object):
@@ -285,14 +286,16 @@ def plot(path, customers):
 
 
 def main(path,num,cap):
-	t = time.time()
+	tt = time.time()
 	solver = Solver(path,num,cap)
 	solver.start()
 	dual = solver.step()
 
 
 
-	objs, paths = labeling_Algoithm_vrptw.labeling_algorithm(dual, solver.dis, solver.customers, solver.capacity, solver.num)
+	# objs, paths = labeling_Algoithm_vrptw.labeling_algorithm(dual, solver.dis, solver.customers, solver.capacity, solver.num)
+
+	objs,paths = t(dual, solver.dis, solver.customers, solver.capacity, solver.num)
 
 
 	# plot(paths[0],solver.customers)
@@ -317,20 +320,23 @@ def main(path,num,cap):
 	# 		temp += solver.routes[key]['route'][:-1]
 	# temp.sort()
 	# print(temp)
-	return solver.rmp.objval,time.time()-t
+	return solver.rmp.objval,time.time()-tt
 
 
 if __name__ == '__main__':
+	main('../data/R103_200_100.csv',100,200)
+	exit()
+
 	with open('result.csv','w',newline='') as ff:
 		wrtt = csv.writer(ff)
 		for problem in os.listdir('../data'):
-			temp = problem.split('.')[0].split('_')
-			cap = int(temp[1])
-			num = int(temp[-1])
-			if problem[0] == 'C':
+			if problem[:2] == 'R1':
+				temp = problem.split('.')[0].split('_')
+				cap = int(temp[1])
+				num = int(temp[-1])
 				obj,tt= main('../data/'+problem,num,cap)
-			wrtt.writerow([problem,obj,tt])
-			print(problem,obj,tt)
+				wrtt.writerow([problem,obj,tt])
+				print(problem,obj,tt)
 
 
 

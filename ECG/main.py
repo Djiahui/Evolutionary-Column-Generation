@@ -6,25 +6,24 @@ def main(path):
     temp = path.split('.')[0].split('_')
     cap = int(temp[1])
     num = int(temp[-1])
-    with open('result.csv', 'a+', newline='') as f:
-        print(path)
-        wrt = csv.writer(f)
-        objs = []
-        times = []
-        for _ in range(10):
-            print(_)
-            slover = entity.Solver('../data/'+path,num,cap)
-            obj,time = slover.solve(False)
-            objs.append(obj)
-            times.append(time)
-
-            del slover
-
-
+    if os.path.exists('result.csv'):
+        f = open('result.csv','a+',newline='')
+    else:
+        f = open('result.csv','w',newline='')
+    print(path)
+    wrt = csv.writer(f)
+    objs = []
+    times = []
+    for _ in range(30):
+        print(path+'---'+str(_)+'th')
+        slover = entity.Solver('../data/'+path,num,cap)
+        obj,time = slover.solve(False)
+        objs.append(obj)
+        times.append(time)
 
         wrt.writerow([path,'obj']+objs)
         wrt.writerow([path,'time']+times)
-        print(path+'-----done')
+    print(path+'-----done')
 
 def multi_process_fun(path):
     temp = path.split('.')[0].split('_')
@@ -32,7 +31,7 @@ def multi_process_fun(path):
     num = int(temp[-1])
     objs = []
     times = []
-    for _ in range(10):
+    for _ in range(30):
         slover = entity.Solver('../data/' + path, num, cap)
         obj, time = slover.solve(False)
         objs.append(obj)
@@ -53,7 +52,7 @@ if __name__ == '__main__':
     pool = Pool(10)
     process_result = []
     for problem in os.listdir('../data'):
-        if problem[:2] == 'R1':
+        if problem[0] == 'R':
             print(problem)
             process_result.append(pool.apply_async(multi_process_fun,(problem,)))
     pool.close()
@@ -62,11 +61,14 @@ if __name__ == '__main__':
     for r in process_result:
         result.append(r.get())
 
+    if os.path.exists('result.csv'):
+        f = open('result.csv','a+',newline='')
+    else:
+        f = open('result.csv','w',newline='')
 
-    with open('result.csv','w',newline='') as f:
-        wrt = csv.writer(f)
-        for name, objs, times in result:
-            wrt.writerow([name, 'obj'] + objs)
-            wrt.writerow([name, 'time'] + times)
+    wrt = csv.writer(f)
+    for name, objs, times in result:
+        wrt.writerow([name, 'obj'] + objs)
+        wrt.writerow([name, 'time'] + times)
 
 
