@@ -324,7 +324,7 @@ def main(path,num,cap):
 
 
 if __name__ == '__main__':
-	main('../data/R103_200_100.csv',100,200)
+	main('../data/R111_200_100.csv',100,200)
 	exit()
 
 	with open('result.csv','w',newline='') as ff:

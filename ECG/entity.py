@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 
 # 0 is not appear in path
 from cg import labeling_Algoithm_vrptw
-
+import Parameter
 
 class Individual(object):
 	def __init__(self, path, dis):
@@ -28,7 +28,7 @@ class Individual(object):
 		# for column generation
 		self.init_route = False
 		self.is_selected = False
-		self.age = 5
+		self.age = Parameter.parameter.age
 
 		# for debug
 		self.source = None
@@ -63,9 +63,9 @@ class Population(object):
 
 		self.dual = None
 
-		self.crossover_num = 100
-		self.iteration_num = customer_num // 4
-		self.max_num_childres = customer_num // 2
+		self.crossover_num = customer_num 
+		self.iteration_num = customer_num // Parameter.parameter.coffie_max_iter
+		self.max_num_childres = customer_num // Parameter.parameter.coffie_max_child
 		self.update_iter = 10
 		self.max_num_append = 5
 
@@ -1082,8 +1082,11 @@ class Solver(object):
 					if vars[j].x>1e-6 and not flag:
 						self.population.pops.append(self.new_added_column[j-m])
 			# print(len(temp))
+			# Todo change!!!
 			self.new_added_column = temp
 			if mode:
+				if itera and not itera%Parameter.parameter.age:
+					self.paths_generate_from_int(dual_cur)
 				if not flag:
 					best_reduced_cost = self.paths_generate(dual_cur)
 					self.add_column()
@@ -1104,8 +1107,6 @@ class Solver(object):
 					dual,obj = self.linear_relaxition_solve()
 					obj_list.append(obj)
 			else:
-				if not itera%10:
-					pass
 
 				best_reduced_cost = self.paths_generate(dual_cur)
 
@@ -1134,6 +1135,46 @@ class Solver(object):
 		# 		print(self.new_added_column[j-m].path)
 		return self.new_rmp.ObjVal,time.time()-t
 
+	def paths_generate_from_int(self, dual_cur):
+		copy_of_rmp = self.new_rmp.copy()
+		temp_vars = copy_of_rmp.getVars()
+		for var in temp_vars:
+			var.vtype = GRB.BINARY
+		copy_of_rmp.optimize()
+
+		n = len(temp_vars)
+		m = len(self.routes_archive)
+		temp_paths = []
+		for j in range(m, n):
+			if temp_vars[j].x>1e-1:
+				temp_paths.append(self.new_added_column[j-m].path)
+
+		for temp_path in temp_paths:
+			self.population.tau = set(temp_path)
+			for _ in range(self.population.iteration_num):
+				pass
+
+
+
+
+
+		# while self.pops or len(self.tau)<self.customer_num:
+		# 	archive = self.iteration(dual)
+		# 	self.pops_update(archive)
+		# 	count += 1
+		# 	if not archive or count==self.update_iter:
+		# 		self.tau.update(set(self.pops[0].path[1:-1]))
+		# 		if len(self.pops) > 1  and self.pops[1].cost < 0:
+		# 			new_ind_archive.append(self.pops[0])
+		# 			new_ind_archive.append(self.pops[1])
+		# 		elif self.pops[0].cost < 0:
+		# 			new_ind_archive.append(self.pops[0])
+		# 		self.pops = list(filter(lambda x: self.deter_in_tau(x), self.pops))
+		# 		self.initial_routes_generates(dual)
+		# 		self.evaluate(dual)
+		# 		count = 0
+		# 		continue
+		# return new_ind_archive
 
 
 

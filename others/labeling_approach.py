@@ -255,7 +255,7 @@ def t(pi, dis, customers, capacity, customer_number):
 
 
     temp_cls = ESPPRC(capacity,tempcustomers,dis,dis)
-    temp_cls.duals = [0]+pi
+    temp_cls.duals = [0]+[0 for _ in range(customer_number)]
 
 
 
