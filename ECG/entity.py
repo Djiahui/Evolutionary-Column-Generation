@@ -9,8 +9,6 @@ import numpy as np
 import pickle
 import random
 import matplotlib.pyplot as plt
-
-# 0 is not appear in path
 from cg import labeling_Algoithm_vrptw
 import Parameter
 
@@ -1049,6 +1047,67 @@ class Solver(object):
 
 		return min(x.cost for x in self.new_added_column)
 
+	def paths_generate_from_int(self, dual_cur):
+		copy_of_rmp = self.new_rmp.copy()
+		temp_vars = copy_of_rmp.getVars()
+
+		for var in temp_vars:
+			var.vtype = GRB.BINARY
+		copy_of_rmp.optimize()
+		print('integer solution obj:')
+		print(copy_of_rmp.Objval)
+
+		n = len(temp_vars)
+		m = len(self.routes_archive)
+		temp_paths = []
+		for j in range(m, n):
+			if temp_vars[j].x>1e-1:
+				temp_paths.append(self.new_added_column[j-m].path)
+		temp_archive = []
+		self.population.pops = []
+		for temp_path in temp_paths:
+			print(temp_path)
+			self.population.tau = set(temp_path[1:-1])
+			while len(self.population.tau) < 0.9 * self.population.customer_num:
+				self.population.initial_routes_generates(dual_cur)
+				self.population.evaluate(dual_cur)
+				for _ in range(self.population.iteration_num):
+					archive = self.population.iteration(dual_cur)
+					self.population.pops_update(archive)
+				if self.population.pops[0].cost<1e-6:
+					temp_archive.append(self.population.pops[0])
+					self.population.tau.update(set(self.population.pops[0].path[1:-1]))
+					self.population.pops = []
+				else:
+					break
+			self.population.tau = set()
+		for ind in self.new_added_column:
+			ind.evaluate_under_dual(dual_cur)
+		self.new_added_column += temp_archive
+
+
+
+		# temp_archive = []
+		# temp_len = len(temp_paths)
+		# for temp_path in temp_paths:
+		# 	self.population.tau = set(temp_path)
+		# 	self.population.initial_routes_generates(dual_cur)
+		# 	self.population.evaluate(dual_cur)
+		# 	for _ in range(self.population.iteration_num):
+		# 		archive = self.population.iteration(dual_cur)
+		# 		self.population.pops_update(archive)
+		# 	if len(self.population.pops)>self.population.max_num_childres//temp_len:
+		# 		temp_archive += self.population.pops[:self.population.max_num_childres//temp_len]
+		# 	else:
+		# 		temp_archive += self.population.pops[:]
+		# 	for ind in temp_archive:
+		# 		ind.age *= 2
+		# 	self.population.pops = []
+		# 	self.population.tau = set()
+		# for ind in self.new_added_column:
+		# 	ind.evaluate_under_dual(dual_cur)
+		# self.new_added_column += temp_archive
+
 	def solve(self,mode):
 		flag = False
 		t = time.time()
@@ -1066,64 +1125,34 @@ class Solver(object):
 			dual_cur = [0] + dual + [0]
 
 			vars = self.new_rmp.getVars()
-			# print('the value of variable')
-			# print([x.x for x in vars])
-			# print('the value of dual variable')
-			# print([round(x,2) for x in dual_cur])
-			# print(best_reduced_cost)
-			# print(obj)
-			n = len(vars)
-			m = len(self.routes_archive)
-			temp = []
-			for j in range(m,n):
-				self.new_added_column[j-m].age -= 1
-				if self.new_added_column[j-m].age or vars[j].x>1e-6:
-					temp.append(self.new_added_column[j-m])
-					if vars[j].x>1e-6 and not flag:
-						self.population.pops.append(self.new_added_column[j-m])
-			# print(len(temp))
-			# Todo change!!!
+			print(obj)
 			if mode:
-				if itera and not itera%Parameter.parameter.age:
+				if iter and not itera%10:
 					self.paths_generate_from_int(dual_cur)
-					self.add_column()
-
-					dual,obj = self.linear_relaxition_solve()
-					obj_list.append(obj)
 				else:
+					n = len(vars)
+					m = len(self.routes_archive)
+					temp = []
+					for j in range(m,n):
+						# self.new_added_column[j-m].age -= 1
+						if self.new_added_column[j-m].age or vars[j].x>1e-6:
+							temp.append(self.new_added_column[j-m])
+							if vars[j].x>1e-6 and not flag:
+								self.population.pops.append(self.new_added_column[j-m])
 					self.new_added_column = temp
 					best_reduced_cost = self.paths_generate(dual_cur)
-					self.add_column()
-
-					dual, obj = self.linear_relaxition_solve()
-					obj_list.append(obj)
-					if len(obj_list)>Parameter.parameter.age and round(obj_list[-5],2)-round(obj,2)<1e-6:
-						flag = True
-				# else:
-				# 	new_objs, new_paths = labeling_Algoithm_vrptw.labeling_algorithm(dual, self.dis, self.customers, self.capacity, self.customer_num)
-				# 	for path in new_paths:
-				# 		dis_eva, cost_eva, arrive_time = self.population.path_eva(path[1:],dual_cur)
-				# 		self.new_added_column.append(Individual(path,dis_eva))
-				# 		self.new_added_column[-1].arrive_time_vector = arrive_time
-				# 		self.new_added_column[-1].demand = sum([self.customers[x]['demand'] for x in path[1:-1]])
-				# 		self.new_added_column[-1].cost = cost_eva
-				# 	self.add_column()
-				# 	dual,obj = self.linear_relaxition_solve()
-				# 	obj_list.append(obj)
+				self.add_column()
+				dual, obj = self.linear_relaxition_solve()
+				obj_list.append(obj)
+				itera += 1
 			else:
 				self.new_added_column = temp
 				best_reduced_cost = self.paths_generate(dual_cur)
-
-
 				self.add_column()
-
 				dual, obj = self.linear_relaxition_solve()
 				obj_list.append(obj)
 				if len(obj_list) > 5 and round(obj_list[-5], 2) - round(obj, 2) < 1e-6:
 					break
-				itera += 1
-
-
 
 		vars =  self.new_rmp.getVars()
 		for var in vars:
@@ -1137,72 +1166,13 @@ class Solver(object):
 		# for j in range(m,n):
 		# 	if vars[j].x>1e-6:
 		# 		print(self.new_added_column[j-m].path)
+		print('final')
+		print(self.new_rmp.ObjVal)
 		return self.new_rmp.ObjVal,time.time()-t
-
-	def paths_generate_from_int(self, dual_cur):
-		copy_of_rmp = self.new_rmp.copy()
-		temp_vars = copy_of_rmp.getVars()
-		for var in temp_vars:
-			var.vtype = GRB.BINARY
-		copy_of_rmp.optimize()
-
-		n = len(temp_vars)
-		m = len(self.routes_archive)
-		temp_paths = []
-		for j in range(m, n):
-			if temp_vars[j].x>1e-1:
-				temp_paths.append(self.new_added_column[j-m].path)
-
-		temp_archive = []
-		for temp_path in temp_paths:
-			self.population.tau = set(temp_path)
-			for _ in range(self.population.iteration_num):
-				self.population.initial_routes_generates(dual_cur)
-				self.population.evaluate(dual_cur)
-				for _ in range(self.population.iteration_num):
-					archive = self.population.iteration(dual)
-					self.population.pops_update(archive)
-				temp_archive.append(self.population.pops[:5] if len(self.population.pops)>5 else self.population[:])
-				self.population.pops = []
-				self.population.tau = set()
-		for ind in self.new_added_column:
-			ind.evaluate_under_dual(dual_cur)
-		self.new_added_column += temp_archive
-
-
-
-
-
-
-
-
-
-
-
-		# while self.pops or len(self.tau)<self.customer_num:
-		# 	archive = self.iteration(dual)
-		# 	self.pops_update(archive)
-		# 	count += 1
-		# 	if not archive or count==self.update_iter:
-		# 		self.tau.update(set(self.pops[0].path[1:-1]))
-		# 		if len(self.pops) > 1  and self.pops[1].cost < 0:
-		# 			new_ind_archive.append(self.pops[0])
-		# 			new_ind_archive.append(self.pops[1])
-		# 		elif self.pops[0].cost < 0:
-		# 			new_ind_archive.append(self.pops[0])
-		# 		self.pops = list(filter(lambda x: self.deter_in_tau(x), self.pops))
-		# 		self.initial_routes_generates(dual)
-		# 		self.evaluate(dual)
-		# 		count = 0
-		# 		continue
-		# return new_ind_archive
-
-
-
 if __name__ == '__main__':
 	solver = Solver('../data/R104_200_100.csv', 100, 700)
 	solver.solve(True)
-	exit(0)
+	exit()
 
 	temp1 = [0, 59, 93, 85, 44, 38, 14, 43, 42, 57, 2, 58, 101]
 	temp2 = [0, 52, 88, 7, 48, 82, 8, 46, 45, 83, 60, 5, 6, 101]
