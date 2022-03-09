@@ -293,9 +293,9 @@ def main(path,num,cap):
 
 
 
-	# objs, paths = labeling_Algoithm_vrptw.labeling_algorithm(dual, solver.dis, solver.customers, solver.capacity, solver.num)
+	objs, paths = labeling_Algoithm_vrptw.labeling_algorithm(dual, solver.dis, solver.customers, solver.capacity, solver.num)
 
-	objs,paths = t(dual, solver.dis, solver.customers, solver.capacity, solver.num)
+	# objs,paths = t(dual, solver.dis, solver.customers, solver.capacity, solver.num)
 
 
 	# plot(paths[0],solver.customers)
@@ -324,7 +324,7 @@ def main(path,num,cap):
 
 
 if __name__ == '__main__':
-	main('../data/R111_200_100.csv',100,200)
+	main('../data/R111_200_100.csv',50,200)
 	exit()
 
 	with open('result.csv','w',newline='') as ff:

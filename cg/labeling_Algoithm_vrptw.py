@@ -73,7 +73,7 @@ def labeling_algorithm(pi, dis, customers, capacity, customer_number):
         count += 1
         it += 1
         if not it%500:
-            print(it)
+            print(len(queue))
         # if not count%100:
         #     print(count)
 

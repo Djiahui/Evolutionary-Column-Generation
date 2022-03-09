@@ -1083,31 +1083,35 @@ class Solver(object):
 						self.population.pops.append(self.new_added_column[j-m])
 			# print(len(temp))
 			# Todo change!!!
-			self.new_added_column = temp
 			if mode:
 				if itera and not itera%Parameter.parameter.age:
 					self.paths_generate_from_int(dual_cur)
-				if not flag:
+					self.add_column()
+
+					dual,obj = self.linear_relaxition_solve()
+					obj_list.append(obj)
+				else:
+					self.new_added_column = temp
 					best_reduced_cost = self.paths_generate(dual_cur)
 					self.add_column()
 
 					dual, obj = self.linear_relaxition_solve()
 					obj_list.append(obj)
-					if len(obj_list)>5 and round(obj_list[-5],2)-round(obj,2)<1e-6:
+					if len(obj_list)>Parameter.parameter.age and round(obj_list[-5],2)-round(obj,2)<1e-6:
 						flag = True
-				else:
-					new_objs, new_paths = labeling_Algoithm_vrptw.labeling_algorithm(dual, self.dis, self.customers, self.capacity, self.customer_num)
-					for path in new_paths:
-						dis_eva, cost_eva, arrive_time = self.population.path_eva(path[1:],dual_cur)
-						self.new_added_column.append(Individual(path,dis_eva))
-						self.new_added_column[-1].arrive_time_vector = arrive_time
-						self.new_added_column[-1].demand = sum([self.customers[x]['demand'] for x in path[1:-1]])
-						self.new_added_column[-1].cost = cost_eva
-					self.add_column()
-					dual,obj = self.linear_relaxition_solve()
-					obj_list.append(obj)
+				# else:
+				# 	new_objs, new_paths = labeling_Algoithm_vrptw.labeling_algorithm(dual, self.dis, self.customers, self.capacity, self.customer_num)
+				# 	for path in new_paths:
+				# 		dis_eva, cost_eva, arrive_time = self.population.path_eva(path[1:],dual_cur)
+				# 		self.new_added_column.append(Individual(path,dis_eva))
+				# 		self.new_added_column[-1].arrive_time_vector = arrive_time
+				# 		self.new_added_column[-1].demand = sum([self.customers[x]['demand'] for x in path[1:-1]])
+				# 		self.new_added_column[-1].cost = cost_eva
+				# 	self.add_column()
+				# 	dual,obj = self.linear_relaxition_solve()
+				# 	obj_list.append(obj)
 			else:
-
+				self.new_added_column = temp
 				best_reduced_cost = self.paths_generate(dual_cur)
 
 
@@ -1149,10 +1153,27 @@ class Solver(object):
 			if temp_vars[j].x>1e-1:
 				temp_paths.append(self.new_added_column[j-m].path)
 
+		temp_archive = []
 		for temp_path in temp_paths:
 			self.population.tau = set(temp_path)
 			for _ in range(self.population.iteration_num):
-				pass
+				self.population.initial_routes_generates(dual_cur)
+				self.population.evaluate(dual_cur)
+				for _ in range(self.population.iteration_num):
+					archive = self.population.iteration(dual)
+					self.population.pops_update(archive)
+				temp_archive.append(self.population.pops[:5] if len(self.population.pops)>5 else self.population[:])
+				self.population.pops = []
+				self.population.tau = set()
+		for ind in self.new_added_column:
+			ind.evaluate_under_dual(dual_cur)
+		self.new_added_column += temp_archive
+
+
+
+
+
+
 
 
 
@@ -1180,7 +1201,8 @@ class Solver(object):
 
 if __name__ == '__main__':
 	solver = Solver('../data/R104_200_100.csv', 100, 700)
-	solver.solve(False)
+	solver.solve(True)
+	exit(0)
 
 	temp1 = [0, 59, 93, 85, 44, 38, 14, 43, 42, 57, 2, 58, 101]
 	temp2 = [0, 52, 88, 7, 48, 82, 8, 46, 45, 83, 60, 5, 6, 101]
