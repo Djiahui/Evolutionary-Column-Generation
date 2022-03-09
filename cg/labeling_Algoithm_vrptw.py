@@ -148,4 +148,3 @@ if __name__ == '__main__':
     costs,paths = labeling_algorithm(dual,dis,customers,capacity,customer_number)
     print(paths[0])
     print(costs[0])
-    exit(0)
