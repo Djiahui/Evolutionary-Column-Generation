@@ -292,7 +292,7 @@ def main(path,num,cap):
 	dual = solver.step()
 
 
-
+	dual = [0] + dual + [0]
 	objs, paths = labeling_Algoithm_vrptw.labeling_algorithm(dual, solver.dis, solver.customers, solver.capacity, solver.num)
 
 	# objs,paths = t(dual, solver.dis, solver.customers, solver.capacity, solver.num)
@@ -302,6 +302,7 @@ def main(path,num,cap):
 	while objs[0] < -(1e-1):
 		solver.add_column(paths)
 		dual = solver.step()
+		dual = [0] + dual + [0]
 		objs, paths = labeling_Algoithm_vrptw.labeling_algorithm(dual, solver.dis, solver.customers, solver.capacity, solver.num)
 		print(objs[0])
 

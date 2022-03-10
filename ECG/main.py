@@ -10,19 +10,18 @@ def main(path):
         f = open('result.csv','a+',newline='')
     else:
         f = open('result.csv','w',newline='')
-    print(path)
     wrt = csv.writer(f)
     objs = []
     times = []
-    for _ in range(30):
-        print(path+'---'+str(_)+'th')
+    for _ in range(5):
         slover = entity.Solver('../data/'+path,num,cap)
         obj,time = slover.solve(False)
+        print(path + '---' + str(_) +'th---'+str(obj)+'---'+str(time))
         objs.append(obj)
         times.append(time)
 
-        wrt.writerow([path,'obj']+objs)
-        wrt.writerow([path,'time']+times)
+    wrt.writerow([path,'obj']+objs)
+    wrt.writerow([path,'time']+times)
     print(path+'-----done')
 
 def multi_process_fun(path):
@@ -44,7 +43,7 @@ def multi_process_fun(path):
 
 if __name__ == '__main__':
     for problem in os.listdir('../data'):
-        if problem[:2] == 'R1':
+        if problem[:2] == 'R2':
             main(problem)
     exit(0)
 

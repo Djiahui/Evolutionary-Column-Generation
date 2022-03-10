@@ -46,11 +46,16 @@ def dominate(new_label, label_list):
 
     return res
 
-
-
-def labeling_algorithm(pi, dis, customers, capacity, customer_number):
-    customer_list = set([i for i in range(customer_number + 2)])
-    new_pi = [0] + pi + [0]
+def labeling_algorithm(pi, dis, customers, capacity, customer_number,target = None):
+    if not target:
+        customer_list = set([i for i in range(customer_number + 2)])
+    else:
+        customer_list = set([i for i in range(customer_number + 2) if i in target])
+    customer_list.update({0,customer_number+1})
+    if not pi:
+        new_pi = [0 for _ in range(customer_number+2)]
+    else:
+        new_pi = pi
     label = Label()
     label.path = [0]
     label.dis = 0
@@ -72,8 +77,8 @@ def labeling_algorithm(pi, dis, customers, capacity, customer_number):
             continue
         count += 1
         it += 1
-        if not it%500:
-            print(len(queue))
+        # if not it%500:
+        #     print(len(queue))
         # if not count%100:
         #     print(count)
 
@@ -116,14 +121,12 @@ def labeling_algorithm(pi, dis, customers, capacity, customer_number):
     best_label = None
     final_labels.sort(key = lambda x:x.dis)
 
-    for label in final_labels:
-        if label.dis < min_cost:
-            min_cost = label.dis
-            best_label = label
+    # for label in final_labels:
+    #     if label.dis < min_cost:
+    #         min_cost = label.dis
+    #         best_label = label
 
-    return [x.dis for x in final_labels[:50]],[x.path for x in final_labels[:50]]
-
-    # return [best_label.dis], [best_label.path[1:]]
+    return [x.dis for x in final_labels],[x.path for x in final_labels]
 
 if __name__ == '__main__':
     import pickle
@@ -145,6 +148,7 @@ if __name__ == '__main__':
     for customer, info in customers.items():
         info['tabu'].add(customer)
     dual = [round(x, 2) for x in dual]
-    costs,paths = labeling_algorithm(dual,dis,customers,capacity,customer_number)
+    dual = [0] + dual + [0]
+    costs,paths = labeling_algorithm(dual,dis,customers,capacity,customer_number,target = set([i for i in range(1,12)]))
     print(paths[0])
     print(costs[0])

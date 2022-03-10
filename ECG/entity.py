@@ -61,7 +61,7 @@ class Population(object):
 
 		self.dual = None
 
-		self.crossover_num = customer_num 
+		self.crossover_num = customer_num // Parameter.parameter.coffie_max_iter
 		self.iteration_num = customer_num // Parameter.parameter.coffie_max_iter
 		self.max_num_childres = customer_num // Parameter.parameter.coffie_max_child
 		self.update_iter = 10
@@ -383,6 +383,18 @@ class Population(object):
 		:param pop2:
 		:return:
 		"""
+		# labeling approach
+		# labeling_objs,labeling_paths = labeling_Algoithm_vrptw.labeling_algorithm(dual,self.dis,self.customers,self.capacity,self.customer_num,set(pop1.path+pop2.path))
+		# new_dis, new_cost, new_arrive_time = self.path_eva(labeling_paths[0], dual)
+		# new_pop = Individual(labeling_paths[0], new_dis)
+		# new_pop.demand = sum([self.customers[x]['demand'] for x in labeling_paths[0]])
+		# new_pop.arrive_time_vector = new_arrive_time
+		# new_pop.cost = new_cost
+		#
+		# new_pop.source = 'crossover'
+		# new_pop.parent = [pop1, pop2]
+		# return new_pop,None
+
 		min_diff_1, demand_1 = self.data_pre(pop1)
 		min_diff_2, demand_2 = self.data_pre(pop2)
 		new_pop1 = self.crossover_operator(pop1, pop2, min_diff_2, demand_2, dual)
@@ -1055,14 +1067,32 @@ class Solver(object):
 			var.vtype = GRB.BINARY
 		copy_of_rmp.optimize()
 		print('integer solution obj:')
-		print(copy_of_rmp.Objval)
+		current_obj = copy_of_rmp.Objval
+		print(current_obj)
 
 		n = len(temp_vars)
 		m = len(self.routes_archive)
 		temp_paths = []
-		for j in range(m, n):
-			if temp_vars[j].x>1e-1:
-				temp_paths.append(self.new_added_column[j-m].path)
+		for j in range(m,n):
+			if temp_vars[j].x > 1e-6:
+				temp_paths.append(self.new_added_column[j - m].path)
+		temp_archive = []
+		for _ in range(len(temp_archive)):
+			path1,path2 = random.choices(temp_paths,k=2)
+			labeling_objs,labeling_paths = labeling_Algoithm_vrptw.labeling_algorithm(dual_cur,self.dis,self.customers,self.capacity,self.customer_num,set(path1+path2))
+			if labeling_objs[0]<0:
+				new_dis, new_cost, new_arrive_time = self.population.path_eva(labeling_paths[0][1:], dual_cur)
+				new_pop = Individual(labeling_paths[0], new_dis)
+				new_pop.demand = sum([self.customers[x]['demand'] for x in labeling_paths[0]])
+				new_pop.arrive_time_vector = new_arrive_time
+				new_pop.cost = new_cost
+				temp_archive.append(new_pop)
+		for ind in self.new_added_column:
+			ind.evaluate_under_dual(dual_cur)
+		self.new_added_column += temp_archive
+		return
+
+
 		temp_archive = []
 		self.population.pops = []
 		for temp_path in temp_paths:
@@ -1083,6 +1113,8 @@ class Solver(object):
 			self.population.tau = set()
 		for ind in self.new_added_column:
 			ind.evaluate_under_dual(dual_cur)
+		for ind in temp_archive:
+			ind.age *= 1
 		self.new_added_column += temp_archive
 
 
@@ -1108,6 +1140,49 @@ class Solver(object):
 		# 	ind.evaluate_under_dual(dual_cur)
 		# self.new_added_column += temp_archive
 
+	def local_search(self,obj,paths,dual_cur):
+		temp_paths = paths
+		best_routes = paths
+		best_cost = obj
+		for _ in range(5):
+			n = len(temp_paths)
+			index_list = [i for i in range(n)]
+			candidate_index = random.choice(index_list)
+			candidate = set(temp_paths[candidate_index])
+			index_list.remove(candidate_index)
+
+
+			new_paths = []
+			new_cost = 0
+			while index_list or candidate:
+				if index_list:
+					candidate_index = random.choice(index_list)
+					index_list.remove(candidate_index)
+					candidate.update(set(temp_paths[candidate_index]))
+				print(candidate)
+				labeling_objs, labeling_paths = labeling_Algoithm_vrptw.labeling_algorithm(dual_cur, self.dis, self.customers,
+																				   self.capacity, self.customer_num,
+																				   target=candidate)
+				if labeling_paths[0][1]==self.customer_num+1:
+					final_obj, final_path = self.paths_select(labeling_objs, labeling_paths)
+					a = 10
+				else:
+					final_obj = labeling_objs[0]
+					final_path = labeling_paths[0]
+				#
+
+				new_cost += final_obj
+				new_paths.append(final_path)
+				print(final_path)
+				candidate -= set(final_path)
+			if new_cost<best_cost:
+				best_cost = new_cost
+				best_routes = new_paths
+
+			temp_paths = new_paths
+
+		return best_cost,best_routes
+
 	def solve(self,mode):
 		flag = False
 		t = time.time()
@@ -1125,17 +1200,18 @@ class Solver(object):
 			dual_cur = [0] + dual + [0]
 
 			vars = self.new_rmp.getVars()
-			print(obj)
+			# print(obj)
 			if mode:
-				if iter and not itera%10:
+				if itera and not itera%10:
 					self.paths_generate_from_int(dual_cur)
 				else:
 					n = len(vars)
 					m = len(self.routes_archive)
 					temp = []
 					for j in range(m,n):
-						# self.new_added_column[j-m].age -= 1
+						self.new_added_column[j-m].age -= 1
 						if self.new_added_column[j-m].age or vars[j].x>1e-6:
+							self.new_added_column[j-m].age += 1
 							temp.append(self.new_added_column[j-m])
 							if vars[j].x>1e-6 and not flag:
 								self.population.pops.append(self.new_added_column[j-m])
@@ -1146,6 +1222,15 @@ class Solver(object):
 				obj_list.append(obj)
 				itera += 1
 			else:
+				n = len(vars)
+				m = len(self.routes_archive)
+				temp = []
+				for j in range(m, n):
+					# self.new_added_column[j-m].age -= 1
+					if self.new_added_column[j - m].age or vars[j].x > 1e-6:
+						temp.append(self.new_added_column[j - m])
+						if vars[j].x > 1e-6 and not flag:
+							self.population.pops.append(self.new_added_column[j - m])
 				self.new_added_column = temp
 				best_reduced_cost = self.paths_generate(dual_cur)
 				self.add_column()
@@ -1162,24 +1247,48 @@ class Solver(object):
 
 		n = len(vars)
 		m = len(self.routes_archive)
+		paths = []
+		for j in range(m,n):
+			if vars[j].x>1e-6:
+				if j<m:
+					paths.append(self.routes_archive[j].path)
+				else:
+					paths.append(self.new_added_column[j-m].path)
+		# obj,paths = self.local_search(self.new_rmp.ObjVal,paths)
+		obj = self.new_rmp.ObjVal
+		# print('final')
+		# print(obj)
+		return obj,time.time()-t
 
-		# for j in range(m,n):
-		# 	if vars[j].x>1e-6:
-		# 		print(self.new_added_column[j-m].path)
-		print('final')
-		print(self.new_rmp.ObjVal)
-		return self.new_rmp.ObjVal,time.time()-t
+	def paths_select(self, temp_objs, temp_paths):
+		dic = {}
+		for obj,path in zip(temp_objs,temp_paths):
+			nn = len(path)
+			if nn in dic:
+				dic[nn] = dic[nn] if obj>dic[nn][0] else [obj,path]
+			else:
+				dic[nn] = [obj,path]
+
+		temp_list = [(key,value) for key,value in dic.items()]
+		temp_list.sort()
+		return temp_list[-1][-1]
+		# mm = len(temp_list)
+		# for i in range(mm-1,-1,-1):
+		# 	pass
+		# return None,None
+
+
 if __name__ == '__main__':
-	solver = Solver('../data/R104_200_100.csv', 100, 700)
-	solver.solve(True)
-	exit()
+	solver = Solver('../data/R104_200_100.csv', 100, 200)
+	# solver.solve(True)
+	# exit()
 
-	temp1 = [0, 59, 93, 85, 44, 38, 14, 43, 42, 57, 2, 58, 101]
-	temp2 = [0, 52, 88, 7, 48, 82, 8, 46, 45, 83, 60, 5, 6, 101]
+	temp1 = [0, 88, 10, 90, 20, 9, 78, 81, 33, 30, 70, 101]
+	temp2 = [0, 48, 19, 11, 63, 64, 49, 36, 47, 82, 101]
 	dual = [0 for _ in range(101)]
 	solver.population.pt(temp1[1:],dual)
 	solver.population.pt(temp2[1:], dual)
-	temp3 = [0, 59, 93, 48, 82, 8, 46, 45, 83, 60, 5, 6, 101]
+	temp3 = [0, 88, 10, 90, 20, 64, 49, 36, 47, 82, 101]
 	solver.path_eva(temp3)
 	exit()
 
