@@ -611,7 +611,7 @@ class Node(object):
 				dis_eva += self.dis[cur, cus]
 				cost_eva += (self.dis[cur, cus] - self.dual[cur])
 			cur = cus
-		demand = sum([customers[x]['demand'] for x in path[:-1]])
+		demand = sum([self.customers[x]['demand'] for x in path[:-1]])
 		if demand > self.capacity:
 			print('wrong capacity')
 
@@ -1066,9 +1066,9 @@ class Solver(object):
 		for var in temp_vars:
 			var.vtype = GRB.BINARY
 		copy_of_rmp.optimize()
-		print('integer solution obj:')
+		# print('integer solution obj:')
 		current_obj = copy_of_rmp.Objval
-		print(current_obj)
+		# print(current_obj)
 
 		n = len(temp_vars)
 		m = len(self.routes_archive)
@@ -1184,7 +1184,6 @@ class Solver(object):
 		return best_cost,best_routes
 
 	def solve(self,mode):
-		flag = False
 		t = time.time()
 
 		self.new_rmp = self.rmp.copy()
@@ -1213,7 +1212,7 @@ class Solver(object):
 						if self.new_added_column[j-m].age or vars[j].x>1e-6:
 							self.new_added_column[j-m].age += 1
 							temp.append(self.new_added_column[j-m])
-							if vars[j].x>1e-6 and not flag:
+							if vars[j].x>1e-6:
 								self.population.pops.append(self.new_added_column[j-m])
 					self.new_added_column = temp
 					best_reduced_cost = self.paths_generate(dual_cur)
@@ -1229,7 +1228,7 @@ class Solver(object):
 					# self.new_added_column[j-m].age -= 1
 					if self.new_added_column[j - m].age or vars[j].x > 1e-6:
 						temp.append(self.new_added_column[j - m])
-						if vars[j].x > 1e-6 and not flag:
+						if vars[j].x > 1e-6:
 							self.population.pops.append(self.new_added_column[j - m])
 				self.new_added_column = temp
 				best_reduced_cost = self.paths_generate(dual_cur)
@@ -1244,6 +1243,8 @@ class Solver(object):
 			var.vtype = GRB.BINARY
 		self.new_rmp.update()
 		self.new_rmp.optimize()
+		old_obj = self.new_rmp.ObjVal
+		time1 = time.time()-t
 
 		n = len(vars)
 		m = len(self.routes_archive)
@@ -1254,11 +1255,11 @@ class Solver(object):
 					paths.append(self.routes_archive[j].path)
 				else:
 					paths.append(self.new_added_column[j-m].path)
-		# obj,paths = self.local_search(self.new_rmp.ObjVal,paths)
-		obj = self.new_rmp.ObjVal
-		# print('final')
-		# print(obj)
-		return obj,time.time()-t
+
+		self.final_local_search(paths)
+
+		new_obj = self.new_rmp.ObjVal
+		return (old_obj,new_obj),(time1,time.time()-t)
 
 	def paths_select(self, temp_objs, temp_paths):
 		dic = {}
@@ -1276,53 +1277,97 @@ class Solver(object):
 		# for i in range(mm-1,-1,-1):
 		# 	pass
 		# return None,None
+	def final_local_search(self, paths):
+		n = len(paths)
+		temp_paths_archive = []
+		for i in range(n):
+			for j in range(i+1,n):
+				labeling_objs,labeling_paths = labeling_Algoithm_vrptw.labeling_algorithm(None,self.dis,self.customers,self.capacity,self.customer_num,set(paths[i]+paths[j]))
+				for obj,path in zip(labeling_objs,labeling_paths):
+					temp_paths_archive.append(path)
+					column = [1 if i in path else 0 for i in range(1,self.customer_num+1)]
+					new_column = gp.Column(column, self.new_rmp.getConstrs())
+					self.new_rmp.addVar(column = new_column,obj = obj)
+					self.new_rmp.addVar(column=new_column,obj=obj, ub=1, lb=0)
+		self.new_rmp.update()
+		self.new_rmp.optimize()
 
 
 if __name__ == '__main__':
-	solver = Solver('../data/R104_200_100.csv', 100, 200)
-	# solver.solve(True)
+	import os
+	import csv
+	mode = False
+	for problem in os.listdir('../data'):
+		if problem[0] != 'l' and problem[-1] == 'v':
+			temp = problem.split('.')[0].split('_')
+			cap = int(temp[1])
+			num = int(temp[-1])
+			name = 'result_' + str(mode) +'.csv'
+			if os.path.exists(name):
+				f = open(name, 'a+', newline='')
+			else:
+				f = open(name, 'w', newline='')
+			wrt = csv.writer(f)
+			objs = []
+			times = []
+			for _ in range(20):
+				slover = Solver('../data/' + problem, num, cap)
+				obj, time_used = slover.solve(mode)
+				print(problem + '---' + str(_) + 'th---' + str(obj) + '---' + str(time_used))
+				objs.append(obj)
+				times.append(time_used)
+
+			wrt.writerow([problem, 'obj'] + objs)
+			wrt.writerow([problem, 'time'] + times)
+			print(problem + '-----done')
+
+
+
+
+	# solver = Solver('../data/R104_200_100.csv', 100, 200)
+	# oo,ttttt = solver.solve(True)
 	# exit()
-
-	temp1 = [0, 88, 10, 90, 20, 9, 78, 81, 33, 30, 70, 101]
-	temp2 = [0, 48, 19, 11, 63, 64, 49, 36, 47, 82, 101]
-	dual = [0 for _ in range(101)]
-	solver.population.pt(temp1[1:],dual)
-	solver.population.pt(temp2[1:], dual)
-	temp3 = [0, 88, 10, 90, 20, 64, 49, 36, 47, 82, 101]
-	solver.path_eva(temp3)
-	exit()
-
-	# # test for mcts
-	dual = [30.46, 36.0, 44.72, 50.0, 41.24, 22.36, 42.42, 52.5, 64.04, 51.0, 67.08, 30.0, 22.36, 64.04, 60.82, 58.3,
-			60.82, 31.62, 64.04, 63.24, 36.06, 53.86, 72.12, 60.0, -9.77000000000001, 22.36, 10.0, 12.64, 59.66, 51.0,
-			34.92, 68.0, 49.52, 72.12, 74.97, 82.8, 42.42, 84.86, 67.94, 22.36, 57.72, 51.0, 68.36, 63.78, 58.3, 39.94,
-			68.42, -11.430000000000007, 68.82, -7.75, 53.86, 22.62, 8.94, 28.900000000000006, -8.009999999999991, 40.97,
-			46.38, 17.369999999999997, 35.6, -23.93, 51.0, 51.0, 69.86, 93.04, 99.86, 19.909999999999997, 87.72,
-			-10.100000000000009, 24.34, -146.32000000000002, 0.030000000000001137, 44.94, 40.24, 23.940000000000012,
-			55.56, 31.3, -37.219999999999985, 54.92, 5.079999999999995, -0.6599999999999966, 33.35000000000001, 46.64,
-			42.2, 48.66, 24.72, 35.730000000000004, 12.739999999999995, 38.48, -28.500000000000007, -62.43000000000001,
-			51.22, 36.76, -73.82, -26.92, 29.74, -68.12, -66.98999999999998, 42.52, -57.730000000000004, -135.7]
-	capacity = 200
-	customer_number = 100
-	with open('../dis.pkl', 'rb') as pkl:
-		dis = pickle.load(pkl)
-	with open('../customers.pkl', 'rb') as pkl2:
-		customers = pickle.load(pkl2)
-	for customer, info in customers.items():
-		info['tabu'].add(customer)
-	dual = [round(x, 2) for x in dual]
-	dual = [0] + dual + [0]
-	t = time.time()
-	pops = Population(customer_number, customers, dis, capacity)
-	pops.initial_routes_generates()
-	pops.evolution(dual)
-	exit()
-
-	t = time.time()
-	mcts = MCTS(dis, customers, capacity, customer_number)
-	mcts.matrix_init(dual)
-	obj = mcts.find_path(dual)
-	print(obj)
-	print(time.time() - t)
-
-	exit()
+	#
+	# temp1 = [0, 88, 10, 90, 20, 9, 78, 81, 33, 30, 70, 101]
+	# temp2 = [0, 48, 19, 11, 63, 64, 49, 36, 47, 82, 101]
+	# dual = [0 for _ in range(101)]
+	# solver.population.pt(temp1[1:],dual)
+	# solver.population.pt(temp2[1:], dual)
+	# temp3 = [0, 88, 10, 90, 20, 64, 49, 36, 47, 82, 101]
+	# solver.path_eva(temp3)
+	# exit()
+	#
+	# # # test for mcts
+	# dual = [30.46, 36.0, 44.72, 50.0, 41.24, 22.36, 42.42, 52.5, 64.04, 51.0, 67.08, 30.0, 22.36, 64.04, 60.82, 58.3,
+	# 		60.82, 31.62, 64.04, 63.24, 36.06, 53.86, 72.12, 60.0, -9.77000000000001, 22.36, 10.0, 12.64, 59.66, 51.0,
+	# 		34.92, 68.0, 49.52, 72.12, 74.97, 82.8, 42.42, 84.86, 67.94, 22.36, 57.72, 51.0, 68.36, 63.78, 58.3, 39.94,
+	# 		68.42, -11.430000000000007, 68.82, -7.75, 53.86, 22.62, 8.94, 28.900000000000006, -8.009999999999991, 40.97,
+	# 		46.38, 17.369999999999997, 35.6, -23.93, 51.0, 51.0, 69.86, 93.04, 99.86, 19.909999999999997, 87.72,
+	# 		-10.100000000000009, 24.34, -146.32000000000002, 0.030000000000001137, 44.94, 40.24, 23.940000000000012,
+	# 		55.56, 31.3, -37.219999999999985, 54.92, 5.079999999999995, -0.6599999999999966, 33.35000000000001, 46.64,
+	# 		42.2, 48.66, 24.72, 35.730000000000004, 12.739999999999995, 38.48, -28.500000000000007, -62.43000000000001,
+	# 		51.22, 36.76, -73.82, -26.92, 29.74, -68.12, -66.98999999999998, 42.52, -57.730000000000004, -135.7]
+	# capacity = 200
+	# customer_number = 100
+	# with open('../dis.pkl', 'rb') as pkl:
+	# 	dis = pickle.load(pkl)
+	# with open('../customers.pkl', 'rb') as pkl2:
+	# 	customers = pickle.load(pkl2)
+	# for customer, info in customers.items():
+	# 	info['tabu'].add(customer)
+	# dual = [round(x, 2) for x in dual]
+	# dual = [0] + dual + [0]
+	# t = time.time()
+	# pops = Population(customer_number, customers, dis, capacity)
+	# pops.initial_routes_generates()
+	# pops.evolution(dual)
+	# exit()
+	#
+	# t = time.time()
+	# mcts = MCTS(dis, customers, capacity, customer_number)
+	# mcts.matrix_init(dual)
+	# obj = mcts.find_path(dual)
+	# print(obj)
+	# print(time.time() - t)
+	#
+	# exit()

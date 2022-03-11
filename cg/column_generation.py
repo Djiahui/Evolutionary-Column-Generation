@@ -328,7 +328,7 @@ if __name__ == '__main__':
 	main('../data/R111_200_100.csv',50,200)
 	exit()
 
-	with open('result.csv','w',newline='') as ff:
+	with open('result_false_nolocal.csv','w',newline='') as ff:
 		wrtt = csv.writer(ff)
 		for problem in os.listdir('../data'):
 			if problem[:2] == 'R1':
