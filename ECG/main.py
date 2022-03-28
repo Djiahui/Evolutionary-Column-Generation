@@ -6,12 +6,7 @@ def main(path,mode):
     temp = path.split('.')[0].split('_')
     cap = int(temp[1])
     num = int(temp[-1])
-    name = 'result_' + str(mode) +'.csv'
-    if os.path.exists(name):
-        f = open(name,'a+',newline='')
-    else:
-        f = open(name,'w',newline='')
-    wrt = csv.writer(f)
+
     objs = []
     times = []
     for _ in range(20):
@@ -20,6 +15,13 @@ def main(path,mode):
         print(path + '---' + str(_) +'th---'+str(obj)+'---'+str(time_use))
         objs.append(obj)
         times.append(time_use)
+
+    name = 'result_' + str(mode) + '.csv'
+    if os.path.exists(name):
+        f = open(name, 'a+', newline='')
+    else:
+        f = open(name, 'w', newline='')
+    wrt = csv.writer(f)
 
     wrt.writerow([path,'obj']+objs)
     wrt.writerow([path,'time']+times)
@@ -45,9 +47,11 @@ def multi_process_fun(path):
 if __name__ == '__main__':
     mode = True
 
-    for problem in os.listdir('../data'):
-        if problem[0] != 'l' and problem[-1] == 'v':
+    for problem in os.listdir('../data')[::-1]:
+        if problem[:4] == 'C208':
             main(problem,mode)
+
+
     exit(0)
 
 

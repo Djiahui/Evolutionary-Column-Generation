@@ -1249,12 +1249,15 @@ class Solver(object):
 		n = len(vars)
 		m = len(self.routes_archive)
 		paths = []
+		objs = []
 		for j in range(m,n):
 			if vars[j].x>1e-6:
 				if j<m:
 					paths.append(self.routes_archive[j].path)
+					objs.append(self.routes_archive[j].dis)
 				else:
 					paths.append(self.new_added_column[j-m].path)
+					objs.append(self.new_added_column[j-m].dis)
 
 		self.final_local_search(paths)
 
@@ -1291,6 +1294,45 @@ class Solver(object):
 					self.new_rmp.addVar(column=new_column,obj=obj, ub=1, lb=0)
 		self.new_rmp.update()
 		self.new_rmp.optimize()
+
+	def new_local_search(self,paths,objs):
+		for _ in range(10):
+			#inter
+			temp_archive_paths = []
+			temp_archive_objs = []
+			for obj,path in zip(objs,paths):
+				temp_archive_paths.append(path)
+				temp_archive_objs.append(obj)
+				labeling_objs,labeling_paths = labeling_Algoithm_vrptw.labeling_algorithm(None,self.dis,self.customers,self.capacity,self.customer_num,set(path))
+				for labeling_obj,labeling_path in zip(labeling_objs,labeling_paths):
+					if set(labeling_path)==set(path) and labeling_obj<= temp_archive_objs[-1]:
+						temp_archive_objs[-1] = labeling_obj
+						temp_archive_paths[-1] = labeling_path
+			#intra
+			n = len(temp_archive_paths)
+			for _ in range(self.customer_num):
+				index1,index2 = random.choices([index for index in range(n)])
+				labeling_objs, labeling_paths = labeling_Algoithm_vrptw.labeling_algorithm(None, self.dis,
+																						   self.customers,
+																						   self.capacity,
+																						   self.customer_num, set(temp_archive_paths[index1]+temp_archive_paths[index2]))
+				dic_1 = {}
+				for labeling_obj,labeling_path in zip(labeling_objs,labeling_paths):
+					temp_key = tuple(sorted(labeling_path))
+					if temp_key in dic_1:
+						if dic_1[temp_key]['obj']>labeling_obj:
+							dic_1[temp_key]['obj'] = labeling_obj
+							dic_1[temp_key]['path'] = labeling_path
+					else:
+						dic_1[temp_key] = {}
+						dic_1[temp_key]['obj'] = labeling_obj
+						dic_1[temp_key]['path'] = labeling_path
+				keys = list(dic_1.keys())
+				dic_2 = {}
+
+
+
+
 
 
 if __name__ == '__main__':

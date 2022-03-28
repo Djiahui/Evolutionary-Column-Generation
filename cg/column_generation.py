@@ -300,7 +300,10 @@ def main(path,num,cap):
 
 	# plot(paths[0],solver.customers)
 	while objs[0] < -(1e-1):
-		solver.add_column(paths)
+		if len(paths)>50:
+			solver.add_column(paths[:50])
+		else:
+			solver.add_column(paths)
 		dual = solver.step()
 		dual = [0] + dual + [0]
 		objs, paths = labeling_Algoithm_vrptw.labeling_algorithm(dual, solver.dis, solver.customers, solver.capacity, solver.num)
@@ -325,20 +328,29 @@ def main(path,num,cap):
 
 
 if __name__ == '__main__':
-	main('../data/R111_200_100.csv',50,200)
-	exit()
+	for problem in os.listdir('../data'):
+		if problem[0] !='l' and problem[-1] == 'v':
+			temp = problem.split('.')[0].split('_')
+			capacity = int(temp[1])
+			cus_num = int(temp[2])
+			objs = []
+			times = []
+			for _ in range(1):
+				obj,time_use = main('../data/'+problem,cus_num,capacity)
+				objs.append(obj)
+				times.append(time_use)
+				print(problem + '---' + str(_) + 'th---'+ str(obj)+'---' + str(time_use) )
 
-	with open('result_false_nolocal.csv','w',newline='') as ff:
-		wrtt = csv.writer(ff)
-		for problem in os.listdir('../data'):
-			if problem[:2] == 'R1':
-				temp = problem.split('.')[0].split('_')
-				cap = int(temp[1])
-				num = int(temp[-1])
-				obj,tt= main('../data/'+problem,num,cap)
-				wrtt.writerow([problem,obj,tt])
-				print(problem,obj,tt)
+			if os.path.exists('result.csv'):
+				f = open('result.csv','a+',newline='')
+			else:
+				f = open('result.csv', 'w',newline='')
 
+			wrt = csv.writer(f)
+			wrt.writerow([problem,'obj']+objs)
+			wrt.writerow([problem, 'time'] + times)
+			f.close()
+			print(problem +'---done')
 
 
 
