@@ -1035,11 +1035,6 @@ class Solver(object):
 		self.new_rmp.update()
 
 	def paths_generate(self, dual):
-		# mcts
-
-		# self.mcts.matrix_init(dual)
-		# new_ind = self.mcts.find_path(dual)
-		# self.new_added_column.append(new_ind)
 
 
 
@@ -1090,55 +1085,6 @@ class Solver(object):
 		for ind in self.new_added_column:
 			ind.evaluate_under_dual(dual_cur)
 		self.new_added_column += temp_archive
-		return
-
-
-		temp_archive = []
-		self.population.pops = []
-		for temp_path in temp_paths:
-			print(temp_path)
-			self.population.tau = set(temp_path[1:-1])
-			while len(self.population.tau) < 0.9 * self.population.customer_num:
-				self.population.initial_routes_generates(dual_cur)
-				self.population.evaluate(dual_cur)
-				for _ in range(self.population.iteration_num):
-					archive = self.population.iteration(dual_cur)
-					self.population.pops_update(archive)
-				if self.population.pops[0].cost<1e-6:
-					temp_archive.append(self.population.pops[0])
-					self.population.tau.update(set(self.population.pops[0].path[1:-1]))
-					self.population.pops = []
-				else:
-					break
-			self.population.tau = set()
-		for ind in self.new_added_column:
-			ind.evaluate_under_dual(dual_cur)
-		for ind in temp_archive:
-			ind.age *= 1
-		self.new_added_column += temp_archive
-
-
-
-		# temp_archive = []
-		# temp_len = len(temp_paths)
-		# for temp_path in temp_paths:
-		# 	self.population.tau = set(temp_path)
-		# 	self.population.initial_routes_generates(dual_cur)
-		# 	self.population.evaluate(dual_cur)
-		# 	for _ in range(self.population.iteration_num):
-		# 		archive = self.population.iteration(dual_cur)
-		# 		self.population.pops_update(archive)
-		# 	if len(self.population.pops)>self.population.max_num_childres//temp_len:
-		# 		temp_archive += self.population.pops[:self.population.max_num_childres//temp_len]
-		# 	else:
-		# 		temp_archive += self.population.pops[:]
-		# 	for ind in temp_archive:
-		# 		ind.age *= 2
-		# 	self.population.pops = []
-		# 	self.population.tau = set()
-		# for ind in self.new_added_column:
-		# 	ind.evaluate_under_dual(dual_cur)
-		# self.new_added_column += temp_archive
 
 	def local_search(self,obj,paths,dual_cur):
 		temp_paths = paths
