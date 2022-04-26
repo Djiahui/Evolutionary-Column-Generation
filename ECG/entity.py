@@ -80,10 +80,13 @@ class Population(object):
 		for pop in self.pops:
 			mu_pop = self.mutation_operator(pop, dual)
 			in_pop = self.insert_operator(pop, dual)
+			de_pop = self.delete_operator(pop,dual)
 			if mu_pop:
 				temp_archive.append(mu_pop)
 			if in_pop:
 				temp_archive.append(in_pop)
+			if de_pop:
+				temp_archive.append(de_pop)
 		for _ in range(self.crossover_num):
 			p_pop1, p_pop2 = random.choices(self.pops, k=2)
 			c_pop1, c_pop2 = self.crossover(p_pop1, p_pop2, dual)
@@ -154,6 +157,7 @@ class Population(object):
 		print(dis_eva, cost_eva, arrive_time)
 
 	def path_eva(self, path, dual):
+		# the input path of this function should not consider the depot
 		cur = 0
 		dis_eva = 0
 		cost_eva = 0
@@ -238,6 +242,31 @@ class Population(object):
 		for pop in self.pops:
 			pop.evaluate_under_dual(dual)
 			pop.is_selected = True
+
+	def delete_operator(self,pop,dual):
+
+		n = len(pop.path)
+
+		improvement = -1e6
+		best_index = None
+		for index in range(1,n-1):
+			temp_improvement = self.dis[pop.path[index-1],pop.path[index]] + self.dis[pop.path[index],pop.path[index+1]] - dual[pop.path[index]]-self.dis[pop.path[index-1],pop.path[index+1]]
+
+			if temp_improvement>improvement:
+				improvement = temp_improvement
+				best_index = index
+		if improvement > 0:
+			new_path = pop.path[:best_index] + pop.path[best_index+1:]
+			dis_eva, cost_eva, arrive_time = self.path_eva(new_path[1:],dual)
+			new_pop = Individual(new_path,dis_eva)
+			new_pop.cost = cost_eva
+			new_pop.arrive_time_vector = arrive_time
+			new_pop.demand = pop.demand - self.customers[pop.path[best_index]]['demand']
+
+			return new_pop
+		return None
+
+
 
 	def mutation_operator(self, pop, dual):
 		"""
@@ -1178,11 +1207,13 @@ class Solver(object):
 							self.population.pops.append(self.new_added_column[j - m])
 				self.new_added_column = temp
 				best_reduced_cost = self.paths_generate(dual_cur)
+				print(obj,best_reduced_cost)
 				self.add_column()
 				dual, obj = self.linear_relaxition_solve()
 				obj_list.append(obj)
 				if len(obj_list) > 5 and round(obj_list[-5], 2) - round(obj, 2) < 1e-6:
 					break
+		print(time.time()-t)
 
 		vars =  self.new_rmp.getVars()
 		for var in vars:
@@ -1191,6 +1222,8 @@ class Solver(object):
 		self.new_rmp.optimize()
 		old_obj = self.new_rmp.ObjVal
 		time1 = time.time()-t
+		print(old_obj,time1)
+		exit(0)
 
 		n = len(vars)
 		m = len(self.routes_archive)
@@ -1282,50 +1315,10 @@ class Solver(object):
 
 
 if __name__ == '__main__':
-	import os
-	import csv
-	mode = False
-	for problem in os.listdir('../data'):
-		if problem[0] != 'l' and problem[-1] == 'v':
-			temp = problem.split('.')[0].split('_')
-			cap = int(temp[1])
-			num = int(temp[-1])
-			name = 'result_' + str(mode) +'.csv'
-			if os.path.exists(name):
-				f = open(name, 'a+', newline='')
-			else:
-				f = open(name, 'w', newline='')
-			wrt = csv.writer(f)
-			objs = []
-			times = []
-			for _ in range(20):
-				slover = Solver('../data/' + problem, num, cap)
-				obj, time_used = slover.solve(mode)
-				print(problem + '---' + str(_) + 'th---' + str(obj) + '---' + str(time_used))
-				objs.append(obj)
-				times.append(time_used)
+	solver = Solver('../data/R104_200_100.csv', 100, 200)
+	solver.solve(False)
+	exit()
 
-			wrt.writerow([problem, 'obj'] + objs)
-			wrt.writerow([problem, 'time'] + times)
-			print(problem + '-----done')
-
-
-
-
-	# solver = Solver('../data/R104_200_100.csv', 100, 200)
-	# oo,ttttt = solver.solve(True)
-	# exit()
-	#
-	# temp1 = [0, 88, 10, 90, 20, 9, 78, 81, 33, 30, 70, 101]
-	# temp2 = [0, 48, 19, 11, 63, 64, 49, 36, 47, 82, 101]
-	# dual = [0 for _ in range(101)]
-	# solver.population.pt(temp1[1:],dual)
-	# solver.population.pt(temp2[1:], dual)
-	# temp3 = [0, 88, 10, 90, 20, 64, 49, 36, 47, 82, 101]
-	# solver.path_eva(temp3)
-	# exit()
-	#
-	# # # test for mcts
 	# dual = [30.46, 36.0, 44.72, 50.0, 41.24, 22.36, 42.42, 52.5, 64.04, 51.0, 67.08, 30.0, 22.36, 64.04, 60.82, 58.3,
 	# 		60.82, 31.62, 64.04, 63.24, 36.06, 53.86, 72.12, 60.0, -9.77000000000001, 22.36, 10.0, 12.64, 59.66, 51.0,
 	# 		34.92, 68.0, 49.52, 72.12, 74.97, 82.8, 42.42, 84.86, 67.94, 22.36, 57.72, 51.0, 68.36, 63.78, 58.3, 39.94,
@@ -1359,3 +1352,29 @@ if __name__ == '__main__':
 	# print(time.time() - t)
 	#
 	# exit()
+	import os
+	import csv
+	mode = False
+	for problem in os.listdir('../data'):
+		if problem[0] != 'l' and problem[-1] == 'v':
+			temp = problem.split('.')[0].split('_')
+			cap = int(temp[1])
+			num = int(temp[-1])
+			name = 'result_' + str(mode) +'.csv'
+			if os.path.exists(name):
+				f = open(name, 'a+', newline='')
+			else:
+				f = open(name, 'w', newline='')
+			wrt = csv.writer(f)
+			objs = []
+			times = []
+			for _ in range(20):
+				slover = Solver('../data/' + problem, num, cap)
+				obj, time_used = slover.solve(mode)
+				print(problem + '---' + str(_) + 'th---' + str(obj) + '---' + str(time_used))
+				objs.append(obj)
+				times.append(time_used)
+
+			wrt.writerow([problem, 'obj'] + objs)
+			wrt.writerow([problem, 'time'] + times)
+			print(problem + '-----done')
