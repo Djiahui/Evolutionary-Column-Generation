@@ -328,6 +328,8 @@ def main(path,num,cap):
 
 
 if __name__ == '__main__':
+	main('../data/R101_200_100.csv',100,200)
+	exit()
 	for problem in os.listdir('../data'):
 		if problem[0] !='l' and problem[-1] == 'v':
 			temp = problem.split('.')[0].split('_')

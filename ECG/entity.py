@@ -101,29 +101,13 @@ class Population(object):
 		new_ind_archive = []
 		count = 0
 		self.tau = set()
+		sppobjs = []
 		self.initial_routes_generates(dual)
 		self.evaluate(dual)
 		for _ in range(self.iteration_num):
 			archive = self.iteration(dual)
 			self.pops_update(archive)
-
-		# while self.pops or len(self.tau)<self.customer_num:
-		# 	archive = self.iteration(dual)
-		# 	self.pops_update(archive)
-		# 	count += 1
-		# 	if not archive or count==self.update_iter:
-		# 		self.tau.update(set(self.pops[0].path[1:-1]))
-		# 		if len(self.pops) > 1  and self.pops[1].cost < 0:
-		# 			new_ind_archive.append(self.pops[0])
-		# 			new_ind_archive.append(self.pops[1])
-		# 		elif self.pops[0].cost < 0:
-		# 			new_ind_archive.append(self.pops[0])
-		# 		self.pops = list(filter(lambda x: self.deter_in_tau(x), self.pops))
-		# 		self.initial_routes_generates(dual)
-		# 		self.evaluate(dual)
-		# 		count = 0
-		# 		continue
-		# return new_ind_archive
+			sppobjs.append(self.pops[0].cost)
 
 	def pops_update(self, archive):
 		self.pops = self.pops + archive
@@ -1158,7 +1142,7 @@ class Solver(object):
 
 		return best_cost,best_routes
 
-	def solve(self,mode):
+	def  solve(self,mode):
 		t = time.time()
 
 		self.new_rmp = self.rmp.copy()
@@ -1223,10 +1207,10 @@ class Solver(object):
 		old_obj = self.new_rmp.ObjVal
 		time1 = time.time()-t
 		print(old_obj,time1)
-		exit(0)
 
 		n = len(vars)
 		m = len(self.routes_archive)
+		inds = []
 		paths = []
 		objs = []
 		for j in range(m,n):
@@ -1234,11 +1218,13 @@ class Solver(object):
 				if j<m:
 					paths.append(self.routes_archive[j].path)
 					objs.append(self.routes_archive[j].dis)
+					inds.append(self.routes_archive[j])
 				else:
+					inds.append(self.new_added_column[j-m])
 					paths.append(self.new_added_column[j-m].path)
 					objs.append(self.new_added_column[j-m].dis)
 
-		self.final_local_search(paths)
+		self.final_local_search(paths, objs)
 
 		new_obj = self.new_rmp.ObjVal
 		return (old_obj,new_obj),(time1,time.time()-t)
@@ -1259,7 +1245,63 @@ class Solver(object):
 		# for i in range(mm-1,-1,-1):
 		# 	pass
 		# return None,None
-	def final_local_search(self, paths):
+	def final_local_search(self, paths,objs):
+
+		class Path_object(object):
+			def __init__(self,path, obj):
+				self.path = path
+				self.obj = obj
+				self.temp = tuple(sorted(self.path[1:-1]))
+
+			def __hash__(self):
+				return hash(self.temp)
+
+			def __eq__(self, other):
+				return self.temp == other.temp
+
+		for _ in range(10):
+			n = len(paths)
+			index1,index2 = random.choices(range(n),k=2)
+			cur_sum_obj = objs[index1] + objs[index2]
+			target_set = set(paths[index1] + paths[index2])
+			labeling_objs, labeling_paths = labeling_Algoithm_vrptw.labeling_algorithm(None, self.dis, self.customers,
+																					   self.capacity, self.customer_num, target_set)
+
+			temp_list = [Path_object(labeling_path,labeling_obj) for labeling_path,labeling_obj in zip(labeling_paths,labeling_objs)]
+
+			f_dic = {}
+			for path_ind in temp_list:
+				if path_ind in f_dic:
+					if f_dic[path_ind].obj>path_ind.obj:
+						f_dic[path_ind] = path_ind
+				else:
+					f_dic[path_ind] = path_ind
+
+
+			new_list = list(f_dic.values())
+
+			temp1 = None
+			temp2 = None
+			for path_ind in new_list:
+				half = tuple(sorted(list(target_set-set(path_ind.path))))
+				if half in f_dic and f_dic[half].obj + path_ind.obj<cur_sum_obj:
+					temp1 = path_ind
+					temp2 = f_dic[half]
+			if temp1:
+				paths[index1] = temp1.path
+				paths[index2] = temp2.path
+				objs[index1] = temp1.obj
+				objs[index2] = temp2.obj
+
+			paths = list(filter(lambda x:len(x)>2,paths))
+		return
+
+
+
+
+
+
+
 		n = len(paths)
 		temp_paths_archive = []
 		for i in range(n):
@@ -1315,7 +1357,7 @@ class Solver(object):
 
 
 if __name__ == '__main__':
-	solver = Solver('../data/R104_200_100.csv', 100, 200)
+	solver = Solver('../data/R101_200_100.csv', 100, 200)
 	solver.solve(False)
 	exit()
 

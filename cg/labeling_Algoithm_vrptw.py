@@ -109,7 +109,6 @@ def labeling_algorithm(pi, dis, customers, capacity, customer_number,target = No
                 new_label.unreachable_cus.update(current.unreachable_cus)
 
                 if new_label.path[-1] in path_dic:
-                    # path_dic[new_label.path[-1]].append(new_label)
                     path_dic[new_label.path[-1]] = dominate(new_label,path_dic[new_label.path[-1]])
                 else:
                     path_dic[new_label.path[-1]] = [new_label]
