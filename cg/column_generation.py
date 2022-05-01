@@ -192,6 +192,7 @@ class Solver(object):
 	def step(self):
 		self.rmp.optimize()
 		dual = self.rmp.getAttr(GRB.Attr.Pi, self.rmp.getConstrs())
+		print(self.rmp.objval)
 		return dual
 
 	def add_column(self,routes):
@@ -307,7 +308,8 @@ def main(path,num,cap):
 		dual = solver.step()
 		dual = [0] + dual + [0]
 		objs, paths = labeling_Algoithm_vrptw.labeling_algorithm(dual, solver.dis, solver.customers, solver.capacity, solver.num)
-		print(objs[0])
+
+	exit()
 
 
 	for key in solver.routes.keys():

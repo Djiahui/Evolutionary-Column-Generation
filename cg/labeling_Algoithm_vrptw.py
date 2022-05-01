@@ -70,9 +70,9 @@ def labeling_algorithm(pi, dis, customers, capacity, customer_number,target = No
     it = 0
     time_now = time.time()
     while len(queue) > 0:
-        if time.time()-time_now>500:
-            print(time.time()-time_now)
-            break
+        # if time.time()-time_now>500:
+        #     print(time.time()-time_now)
+        #     break
 
         current = queue.pop(0)
         if current.dominated:
