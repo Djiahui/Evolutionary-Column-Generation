@@ -14,7 +14,7 @@ class Label(object):
         new_label.path = self.path[:] + [customer]
         new_label.demand = self.demand + customers[customer]['demand']
         new_label.dis = self.dis + dis[last_node, customer] - new_pi[last_node]
-        new_label.time = max(self.time + dis[last_node, customer], customers[customer]['start'])+customers[customer]['service']
+        new_label.time = max(self.time + +customers[self.path[-1]]['service']+dis[last_node, customer], customers[customer]['start'])
         new_label.length = self.length + 1
         new_label.unreachable_cus.add(customer)
 
@@ -95,7 +95,7 @@ def labeling_algorithm(pi, dis, customers, capacity, customer_number,target = No
         for customer in (customer_list-current.unreachable_cus):
             if customer in current.unreachable_cus:
                 continue
-            if current.demand + customers[customer]['demand']<=capacity and current.time+dis[last_node,customer]<=customers[customer]['end']:
+            if current.demand + customers[customer]['demand']<=capacity and current.time+customers[last_node]['service']+dis[last_node,customer]<=customers[customer]['end']:
                 temp_labels.append(current.expand(customers,customer,dis,last_node,new_pi))
             else:
                 current.unreachable_cus.add(customer)

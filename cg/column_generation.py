@@ -309,7 +309,7 @@ def main(path,num,cap):
 		dual = [0] + dual + [0]
 		objs, paths = labeling_Algoithm_vrptw.labeling_algorithm(dual, solver.dis, solver.customers, solver.capacity, solver.num)
 
-	exit()
+
 
 
 	for key in solver.routes.keys():
@@ -319,6 +319,7 @@ def main(path,num,cap):
 
 	solver.rmp.update()
 	solver.rmp.optimize()
+	print('final %f',solver.rmp.objval)
 	# temp = []
 	# for key in solver.routes.keys():
 	# 	if solver.routes[key]['var'].x > 0:
@@ -330,7 +331,7 @@ def main(path,num,cap):
 
 
 if __name__ == '__main__':
-	main('../data/R101_200_100.csv',100,200)
+	main('../data/C101_200_100.csv',100,200)
 	exit()
 	for problem in os.listdir('../data'):
 		if problem[0] !='l' and problem[-1] == 'v':

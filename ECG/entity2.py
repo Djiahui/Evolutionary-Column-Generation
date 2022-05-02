@@ -231,6 +231,8 @@ class Population(object):
 	def delete_operator(self,pop,dual):
 
 		n = len(pop.path)
+		if n==3:
+			return None
 
 		improvement = -1e6
 		best_index = None
@@ -495,6 +497,29 @@ class Population(object):
 			return new_pop
 		else:
 			return None
+
+	def evolution_modefied(self, dual_cur):
+		self.pops = []
+		final_archive = []
+		self.tau = set()
+		while len(self.tau)<self.customer_num:
+			self.initial_routes_generates(dual_cur)
+
+			if len(self.pops) != 1:
+				for _ in range(self.iteration_num):
+					archive = self.iteration(dual_cur)
+					self.pops_update(archive)
+
+			if self.pops[0].cost>0:
+				break
+			final_archive += self.pops[:10]
+			self.tau.update(set(self.pops[0].path[1:-1]))
+			# print(final_archive[-1].path)
+			self.pops = []
+
+
+		return final_archive
+
 
 
 class MCTS(object):
@@ -1050,28 +1075,18 @@ class Solver(object):
 		self.rmp.update()
 
 	def paths_generate(self, dual_cur):
-		for ind in self.population.pops:
-			ind.evaluate_under_dual(dual_cur)
-		self.population.evolution(dual_cur)
 
-		self.new_added_column = self.population.pops
-		self.population.pops = []
+		# self.population.pops = [ind for ind in self.routes_archive if ind.var.x > 1e-6]
+		# for ind in self.population.pops:
+		# 	ind.evaluate_under_dual(dual_cur)
+		# self.population.evolution(dual_cur)
+
+		self.new_added_column = self.population.evolution_modefied(dual_cur)
+
 
 		return min(x.cost for x in self.new_added_column)
 
 	def paths_generate_from_int(self, dual_cur):
-		class Path_object(object):
-			def __init__(self,path, obj):
-				self.path = path
-				self.obj = obj
-				self.temp = tuple(sorted(self.path[1:-1]))
-
-			def __hash__(self):
-				return hash(self.temp)
-
-			def __eq__(self, other):
-				return self.temp == other.temp
-
 		temp_rmp = self.rmp.copy()
 		vars = temp_rmp.getVars()
 		for var in vars:
@@ -1082,46 +1097,53 @@ class Solver(object):
 
 		m = len(vars)
 		paths = [self.routes_archive[i].path for i in range(m) if vars[i].x>1e-6]
-		objs = [self.routes_archive[i].dis for i in range(m) if vars[i].x>1e-6]
+		diss = [self.routes_archive[i].dis for i in range(m) if vars[i].x>1e-6]
+
+		temp_list = [(path,obj) for path,obj in zip(paths,diss)]
+		temp_archive_new_add = []
 
 
 		for _ in range(10):
-			n = len(paths)
-			index1,index2 = random.choices(range(n),k=2)
-			cur_sum_obj = objs[index1] + objs[index2]
-			target_set = set(paths[index1] + paths[index2])
+			n = len(temp_list)
+			temp1 = temp_list.pop(random.randint(0,n-1))
+			temp2 = temp_list.pop(random.randint(0,n-2))
+			cur_sum_dis = temp1[1]+temp2[1]
+			target_set = set(temp1[0]+temp2[0])
 			labeling_objs, labeling_paths = labeling_Algoithm_vrptw.labeling_algorithm(dual_cur, self.dis, self.customers,
 																					   self.capacity, self.customer_num, target_set)
 
-			temp_list = [Path_object(labeling_path,labeling_obj) for labeling_path,labeling_obj in zip(labeling_paths,labeling_objs)]
-			## Todo change
+			dic = {}
+			for path in labeling_paths:
+				temp_dis = sum([self.dis[x,y] for x,y in zip(path[:-1],path[1:])])
+				dic[tuple(sorted(path[1:-1]))] = (path,temp_dis)
 
-			f_dic = {}
-			for path_ind in temp_list:
-				if path_ind in f_dic:
-					if f_dic[path_ind].obj>path_ind.obj:
-						f_dic[path_ind] = path_ind
-				else:
-					f_dic[path_ind] = path_ind
+			new1 = None
+			new2 = None
 
+			temp_archive = []
+			for path,temp_dis in dic.values():
+				half = tuple(sorted(list(target_set-set(path))))
+				if half in dic and dic[half][1]+temp_dis<cur_sum_dis:
+					new1 = (path,temp_dis)
+					new2 = dic[half]
+					temp_archive_new_add.append(new1)
+					temp_archive_new_add.append(new2)
+					print('before %f',cur_sum_dis)
+					cur_sum_dis = dic[half][1]+temp_dis
+					print('after %f',cur_sum_dis)
+			if new1:
+				temp_list.append(new1)
+				temp_list.append(new2)
 
-			new_list = list(f_dic.values())
+		for path,temp_dis in temp_archive_new_add:
+			if len(path) ==2:
+				continue
+			self.new_added_column.append(Individual(path,temp_dis))
+			dis_eva, cost_eva, arrive_time = self.population.path_eva(path[1:],dual_cur)
+			self.new_added_column[-1].cost = cost_eva
+			self.new_added_column[-1].arrive_time_vector = arrive_time
+			self.new_added_column[-1].demand = sum(self.customers[x]['demand'] for x in path)
 
-			for path_ind in new_list:
-				half = tuple(sorted(list(target_set-set(path_ind.path))))
-				if half in f_dic and f_dic[half].obj + path_ind.obj<cur_sum_obj:
-					self.new_added_column.append(path_ind)
-					self.new_added_column.append(f_dic[half])
-
-					temp1 = path_ind
-					temp2 = f_dic[half]
-			if temp1:
-				paths[index1] = temp1.path
-				paths[index2] = temp2.path
-				objs[index1] = temp1.obj
-				objs[index2] = temp2.obj
-
-			paths = list(filter(lambda x:len(x)>2,paths))
 
 
 
@@ -1177,11 +1199,12 @@ class Solver(object):
 		itera = 0
 		while best_reduced_cost < -(1e-1):
 			dual,obj = self.linear_relaxition_solve()
-			print(obj)
+			obj_list.append(obj)
+
 			dual_cur = [0] + dual + [0]
 
-			self.population.pops = [ind for ind in self.routes_archive if ind.var.x > 1e-6]
 			best_reduced_cost = self.paths_generate(dual_cur)
+			print(obj,best_reduced_cost)
 
 			if mode:
 				if itera and not itera%10:
@@ -1190,15 +1213,16 @@ class Solver(object):
 			self.add_column()
 			itera += 1
 
-
-		exit()
-
 		vars = self.rmp.getVars()
 		for var in vars:
 			var.vtype = GRB.BINARY
 		self.rmp.update()
 		self.rmp.optimize()
 		fianl_obj = self.rmp.ObjVal
+		plt.plot(range(len(obj_list)),obj_list)
+		plt.title(str(fianl_obj))
+		plt.show()
+		print('final %f',fianl_obj)
 
 
 	def final_local_search(self, paths,objs):
@@ -1293,8 +1317,8 @@ class Solver(object):
 
 
 if __name__ == '__main__':
-	solver = Solver('../data/R101_200_100.csv', 100, 200)
-	solver.solve(True)
+	solver = Solver('../data/C101_200_100.csv', 100, 200)
+	solver.solve(False)
 	exit()
 
 	# dual = [30.46, 36.0, 44.72, 50.0, 41.24, 22.36, 42.42, 52.5, 64.04, 51.0, 67.08, 30.0, 22.36, 64.04, 60.82, 58.3,
