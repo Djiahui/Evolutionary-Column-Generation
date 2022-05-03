@@ -11,7 +11,7 @@ import random
 import matplotlib.pyplot as plt
 from cg import labeling_Algoithm_vrptw
 import Parameter
-
+import local_search
 class Individual(object):
 	def __init__(self, path, dis):
 		# deterministic
@@ -1076,12 +1076,14 @@ class Solver(object):
 
 	def paths_generate(self, dual_cur):
 
-		# self.population.pops = [ind for ind in self.routes_archive if ind.var.x > 1e-6]
-		# for ind in self.population.pops:
-		# 	ind.evaluate_under_dual(dual_cur)
-		# self.population.evolution(dual_cur)
+		self.population.pops = [ind for ind in self.routes_archive if ind.var.x > 1e-6]
+		for ind in self.population.pops:
+			ind.evaluate_under_dual(dual_cur)
+		self.population.evolution(dual_cur)
+		self.new_added_column = self.population.pops
+		self.population.pops = []
 
-		self.new_added_column = self.population.evolution_modefied(dual_cur)
+		# self.new_added_column = self.population.evolution_modefied(dual_cur)
 
 
 		return min(x.cost for x in self.new_added_column)
@@ -1109,31 +1111,42 @@ class Solver(object):
 			temp2 = temp_list.pop(random.randint(0,n-2))
 			cur_sum_dis = temp1[1]+temp2[1]
 			target_set = set(temp1[0]+temp2[0])
-			labeling_objs, labeling_paths = labeling_Algoithm_vrptw.labeling_algorithm(dual_cur, self.dis, self.customers,
-																					   self.capacity, self.customer_num, target_set)
+			new_path1, new_path2 = local_search.tree_search(self.customers, self.dis, target_set,cur_sum_dis,temp1[0][:-1]+[0]+temp2[0][1:],self.capacity)
+			if new_path1:
+				temp_dis = sum([self.dis[x,y] for x,y in zip(new_path1[:-1],new_path1[1:])])
+				temp_archive_new_add.append((new_path1,temp_dis))
+				temp_list.append((new_path1,temp_dis))
+			if new_path2:
+				temp_dis = sum([self.dis[x, y] for x, y in zip(new_path2[:-1], new_path2[1:])])
+				temp_archive_new_add.append((new_path2, temp_dis))
+				temp_list.append((new_path2, temp_dis))
 
-			dic = {}
-			for path in labeling_paths:
-				temp_dis = sum([self.dis[x,y] for x,y in zip(path[:-1],path[1:])])
-				dic[tuple(sorted(path[1:-1]))] = (path,temp_dis)
-
-			new1 = None
-			new2 = None
-
-			temp_archive = []
-			for path,temp_dis in dic.values():
-				half = tuple(sorted(list(target_set-set(path))))
-				if half in dic and dic[half][1]+temp_dis<cur_sum_dis:
-					new1 = (path,temp_dis)
-					new2 = dic[half]
-					temp_archive_new_add.append(new1)
-					temp_archive_new_add.append(new2)
-					print('before %f',cur_sum_dis)
-					cur_sum_dis = dic[half][1]+temp_dis
-					print('after %f',cur_sum_dis)
-			if new1:
-				temp_list.append(new1)
-				temp_list.append(new2)
+			#
+			# labeling_objs, labeling_paths = labeling_Algoithm_vrptw.labeling_algorithm(dual_cur, self.dis, self.customers,
+			# 																		   self.capacity, self.customer_num, target_set)
+			#
+			# dic = {}
+			# for path in labeling_paths:
+			# 	temp_dis = sum([self.dis[x,y] for x,y in zip(path[:-1],path[1:])])
+			# 	dic[tuple(sorted(path[1:-1]))] = (path,temp_dis)
+			#
+			# new1 = None
+			# new2 = None
+			#
+			# temp_archive = []
+			# for path,temp_dis in dic.values():
+			# 	half = tuple(sorted(list(target_set-set(path))))
+			# 	if half in dic and dic[half][1]+temp_dis<cur_sum_dis:
+			# 		new1 = (path,temp_dis)
+			# 		new2 = dic[half]
+			# 		temp_archive_new_add.append(new1)
+			# 		temp_archive_new_add.append(new2)
+			# 		print('before %f',cur_sum_dis)
+			# 		cur_sum_dis = dic[half][1]+temp_dis
+			# 		print('after %f',cur_sum_dis)
+			# if new1:
+			# 	temp_list.append(new1)
+			# 	temp_list.append(new2)
 
 		for path,temp_dis in temp_archive_new_add:
 			if len(path) ==2:
@@ -1218,63 +1231,39 @@ class Solver(object):
 			var.vtype = GRB.BINARY
 		self.rmp.update()
 		self.rmp.optimize()
-		fianl_obj = self.rmp.ObjVal
-		plt.plot(range(len(obj_list)),obj_list)
-		plt.title(str(fianl_obj))
-		plt.show()
-		print('final %f',fianl_obj)
+		original_obj = self.rmp.ObjVal
+		final_obj = self.final_local_search()
+
+		print(original_obj,final_obj)
 
 
-	def final_local_search(self, paths,objs):
 
-		class Path_object(object):
-			def __init__(self,path, obj):
-				self.path = path
-				self.obj = obj
-				self.temp = tuple(sorted(self.path[1:-1]))
 
-			def __hash__(self):
-				return hash(self.temp)
 
-			def __eq__(self, other):
-				return self.temp == other.temp
+	def final_local_search(self):
+		vars = self.rmp.getVars()
+		m = len(vars)
+		cur_obj = self.rmp.ObjVal
+		paths = [self.routes_archive[i].path for i in range(m) if vars[i].x > 1e-6]
+		diss = [self.routes_archive[i].dis for i in range(m) if vars[i].x > 1e-6]
+		temp_list = [(path, obj) for path, obj in zip(paths, diss)]
 
 		for _ in range(10):
-			n = len(paths)
-			index1,index2 = random.choices(range(n),k=2)
-			cur_sum_obj = objs[index1] + objs[index2]
-			target_set = set(paths[index1] + paths[index2])
-			labeling_objs, labeling_paths = labeling_Algoithm_vrptw.labeling_algorithm(None, self.dis, self.customers,
-																					   self.capacity, self.customer_num, target_set)
-
-			temp_list = [Path_object(labeling_path,labeling_obj) for labeling_path,labeling_obj in zip(labeling_paths,labeling_objs)]
-
-			f_dic = {}
-			for path_ind in temp_list:
-				if path_ind in f_dic:
-					if f_dic[path_ind].obj>path_ind.obj:
-						f_dic[path_ind] = path_ind
-				else:
-					f_dic[path_ind] = path_ind
-
-
-			new_list = list(f_dic.values())
-
-			temp1 = None
-			temp2 = None
-			for path_ind in new_list:
-				half = tuple(sorted(list(target_set-set(path_ind.path))))
-				if half in f_dic and f_dic[half].obj + path_ind.obj<cur_sum_obj:
-					temp1 = path_ind
-					temp2 = f_dic[half]
-			if temp1:
-				paths[index1] = temp1.path
-				paths[index2] = temp2.path
-				objs[index1] = temp1.obj
-				objs[index2] = temp2.obj
-
-			paths = list(filter(lambda x:len(x)>2,paths))
-		return
+			n = len(temp_list)
+			temp1 = temp_list.pop(random.randint(0, n - 1))
+			temp2 = temp_list.pop(random.randint(0, n - 2))
+			cur_sum_dis = temp1[1] + temp2[1]
+			target_set = set(temp1[0] + temp2[0])
+			new_path1, new_path2 = local_search.tree_search(self.customers, self.dis, target_set, cur_sum_dis,
+															temp1[0][:-1] + [0] + temp2[0][1:], self.capacity)
+			if new_path1:
+				temp_dis = sum([self.dis[x, y] for x, y in zip(new_path1[:-1], new_path1[1:])])
+				temp_list.append((new_path1, temp_dis))
+			if new_path2:
+				temp_dis = sum([self.dis[x, y] for x, y in zip(new_path2[:-1], new_path2[1:])])
+				temp_list.append((new_path2, temp_dis))
+			cur_obj = cur_obj-cur_sum_dis+temp_list[-1][1] + temp_list[-2][1]
+		return cur_obj
 
 	def new_local_search(self,paths,objs):
 		for _ in range(10):
@@ -1317,8 +1306,8 @@ class Solver(object):
 
 
 if __name__ == '__main__':
-	solver = Solver('../data/C101_200_100.csv', 100, 200)
-	solver.solve(False)
+	solver = Solver('../data/R101_200_100.csv', 100, 200)
+	solver.solve(True)
 	exit()
 
 	# dual = [30.46, 36.0, 44.72, 50.0, 41.24, 22.36, 42.42, 52.5, 64.04, 51.0, 67.08, 30.0, 22.36, 64.04, 60.82, 58.3,

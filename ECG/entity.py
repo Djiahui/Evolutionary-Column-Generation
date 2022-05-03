@@ -1142,7 +1142,7 @@ class Solver(object):
 
 		return best_cost,best_routes
 
-	def  solve(self,mode):
+	def solve(self,mode):
 		t = time.time()
 
 		self.new_rmp = self.rmp.copy()
