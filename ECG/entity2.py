@@ -150,6 +150,7 @@ class Population(object):
 		for cus in path:
 			arrive = round(time_eva + self.dis[cus, cur], 2)
 			if arrive > self.customers[cus]['end']:
+				print('infeasible',path)
 				return None, None, None
 			else:
 				time_eva = max(arrive, self.customers[cus]['start']) + self.customers[cus][
@@ -261,6 +262,8 @@ class Population(object):
 		:param pop: Individual
 		:return:
 		"""
+		if not pop:
+			a = 0
 		n = len(pop.path)
 
 		index = random.randint(1, n - 2)
@@ -1121,32 +1124,6 @@ class Solver(object):
 				temp_archive_new_add.append((new_path2, temp_dis))
 				temp_list.append((new_path2, temp_dis))
 
-			#
-			# labeling_objs, labeling_paths = labeling_Algoithm_vrptw.labeling_algorithm(dual_cur, self.dis, self.customers,
-			# 																		   self.capacity, self.customer_num, target_set)
-			#
-			# dic = {}
-			# for path in labeling_paths:
-			# 	temp_dis = sum([self.dis[x,y] for x,y in zip(path[:-1],path[1:])])
-			# 	dic[tuple(sorted(path[1:-1]))] = (path,temp_dis)
-			#
-			# new1 = None
-			# new2 = None
-			#
-			# temp_archive = []
-			# for path,temp_dis in dic.values():
-			# 	half = tuple(sorted(list(target_set-set(path))))
-			# 	if half in dic and dic[half][1]+temp_dis<cur_sum_dis:
-			# 		new1 = (path,temp_dis)
-			# 		new2 = dic[half]
-			# 		temp_archive_new_add.append(new1)
-			# 		temp_archive_new_add.append(new2)
-			# 		print('before %f',cur_sum_dis)
-			# 		cur_sum_dis = dic[half][1]+temp_dis
-			# 		print('after %f',cur_sum_dis)
-			# if new1:
-			# 	temp_list.append(new1)
-			# 	temp_list.append(new2)
 
 		for path,temp_dis in temp_archive_new_add:
 			if len(path) ==2:
