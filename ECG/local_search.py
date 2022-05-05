@@ -68,8 +68,8 @@ class Tree(object):
 
 	def search(self,node):
 		temp_list = [(cus,node.time + self.customers[node.path[-1]]['service'] + self.dis[node.path[-1],cus],node.load + self.customers[cus]['demand']) for cus in node.rest_cus]
-		un_reach = [(cus,arrive_time,load) for cus,arrive_time,load in temp_list if arrive_time>self.customers[cus]['end'] or load>self.capacity]
-		reach_able = [(cus,arrive_time,load) for cus,arrive_time,load in temp_list if arrive_time<=self.customers[cus]['end'] or load<=self.capacity]
+		un_reach = [(cus,arrive_time,load) for cus,arrive_time,load in temp_list if arrive_time > self.customers[cus]['end'] or load > self.capacity]
+		reach_able = [(cus,arrive_time,load) for cus,arrive_time,load in temp_list if arrive_time <= self.customers[cus]['end'] and load <= self.capacity]
 		if node.flag and un_reach:
 			return
 		temp = self.target_set - set(node.path[1:] + [len(self.customers)-1])
@@ -126,36 +126,36 @@ class Tree(object):
 
 		while queue:
 			node = queue.pop(0)
-			print(node.path)
+			# print(node.path)
 
 			temp_list = [(cus, node.time + self.customers[node.path[-1]]['service'] + self.dis[node.path[-1], cus],
 						  node.load + self.customers[cus]['demand']) for cus in node.rest_cus]
 			un_reach = [(cus, arrive_time, load) for cus, arrive_time, load in temp_list if
 						arrive_time > self.customers[cus]['end'] or load > self.capacity]
 			reach_able = [(cus, arrive_time, load) for cus, arrive_time, load in temp_list if
-						  arrive_time <= self.customers[cus]['end'] or load <= self.capacity]
+						  arrive_time <= self.customers[cus]['end'] and load <= self.capacity]
 			# first pruning
 			if node.flag and un_reach:
-				print('first')
+				# print('first')
 				continue
 			# second
 			if not node.flag and un_reach:
 				if self.conflict_deter(un_reach):
-					print('second')
+					# print('second')
 					continue
 
 			# third
-			print('bounding')
+			# print('bounding')
 			temp = self.target_set - set(node.path[1:] + [len(self.customers) - 1])
 			obj,path  = self.bound(node.path[-1],len(self.customers)-1,temp)
 			node.lb = node.total_dis + obj
 			if node.lb > self.ub:
 				continue
-			print('test')
+			# print('test')
 
 			if self.feasible_test(node,path[1:]):
 				node.path += path[1:]
-				print('fea',node.path)
+				# print('fea',node.path)
 				if node.lb < self.ub:
 					self.best_path = node.path[:]
 					self.ub = node.lb
@@ -188,16 +188,16 @@ class Tree(object):
 
 		for cus in path:
 			arr = time +self.customers[cur]['service'] + self.dis[cur,cus]
-			if arr>self.customers[cus]['end']:
+			if arr > self.customers[cus]['end']:
 				return False
-			if load + self.customers[cus]['demand'] >self.capacity:
-				return  False
+			if load + self.customers[cus]['demand'] > self.capacity:
+				return False
 			if cus == 0:
 				load = 0
 				time = 0
 			else:
 				load += self.customers[cus]['demand']
-				time = max(self.customers[cus]['start'],arr)
+				time = max(self.customers[cus]['start'], arr)
 			cur = cus
 		return True
 

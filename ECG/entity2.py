@@ -909,6 +909,7 @@ class Solver(object):
 				temp = [self.customers[i]['loc'][0] - self.customers[j]['loc'][0],
 						self.customers[i]['loc'][1] - self.customers[j]['loc'][1]]
 				self.dis[(i, j)] = round(math.sqrt(temp[0] * temp[0] + temp[1] * temp[1]), 2)
+				self.dis[(i, j)] = int(self.dis[(i,j)])
 
 	def pre_press(self):
 		self.dis_calcul()
@@ -1209,6 +1210,8 @@ class Solver(object):
 		self.rmp.update()
 		self.rmp.optimize()
 		original_obj = self.rmp.ObjVal
+		print(original_obj)
+		exit()
 		final_obj = self.final_local_search()
 
 		print(original_obj,final_obj)
@@ -1283,8 +1286,8 @@ class Solver(object):
 
 
 if __name__ == '__main__':
-	solver = Solver('../data/R101_200_100.csv', 100, 200)
-	solver.solve(True)
+	solver = Solver('../data/largeRC102_200_800.csv', 200, 800)
+	solver.solve(False)
 	exit()
 
 	# dual = [30.46, 36.0, 44.72, 50.0, 41.24, 22.36, 42.42, 52.5, 64.04, 51.0, 67.08, 30.0, 22.36, 64.04, 60.82, 58.3,
