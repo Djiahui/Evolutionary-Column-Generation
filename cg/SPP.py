@@ -2,6 +2,7 @@ import gurobipy as gp
 from gurobipy import GRB
 import matplotlib.pyplot as plt
 
+
 class du(object):
 	def __init__(self, n):
 		self.father = [i for i in range(n)]
