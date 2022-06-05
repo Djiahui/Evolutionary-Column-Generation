@@ -192,7 +192,7 @@ class Solver(object):
 	def step(self):
 		self.rmp.optimize()
 		dual = self.rmp.getAttr(GRB.Attr.Pi, self.rmp.getConstrs())
-		print(self.rmp.objval)
+		# print(self.rmp.objval)
 		return dual
 
 	def add_column(self,routes):
@@ -284,6 +284,16 @@ def plot(path, customers):
 
 
 
+def once(path,num,cap):
+	tt = time.time()
+	solver = Solver(path, num, cap)
+	solver.start()
+	dual = solver.step()
+
+	dual = [0] + dual + [0]
+	objs, paths = labeling_Algoithm_vrptw.labeling_algorithm_timelimits(dual, solver.dis, solver.customers, solver.capacity,
+															 solver.num,600)
+	return objs[0]
 
 
 def main(path,num,cap):
@@ -331,8 +341,23 @@ def main(path,num,cap):
 
 
 if __name__ == '__main__':
-	main('../data/C101_200_100.csv',100,200)
+	import os
+	import csv
+	f = open('once.csv', 'w', newline='')
+	wrt = csv.writer(f)
+	for problem in os.listdir('../data'):
+		if problem[0] != 'l' and problem[-1] == 'v':
+			temp = problem.split('.')[0].split('_')
+			capacity = int(temp[1])
+			cus_num = int(temp[2])
+			objs = []
+			sppobj = once('../data/'+problem,cus_num,capacity)
+			print(problem,sppobj)
+			wrt.writerow([problem,sppobj])
 	exit()
+
+	main('../data/C101_200_100.csv',100,200)
+
 	for problem in os.listdir('../data'):
 		if problem[0] !='l' and problem[-1] == 'v':
 			temp = problem.split('.')[0].split('_')

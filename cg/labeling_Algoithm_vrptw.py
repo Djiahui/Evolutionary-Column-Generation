@@ -70,10 +70,6 @@ def labeling_algorithm(pi, dis, customers, capacity, customer_number,target = No
     it = 0
     time_now = time.time()
     while len(queue) > 0:
-        # if time.time()-time_now>500:
-        #     print(time.time()-time_now)
-        #     break
-
         current = queue.pop(0)
         if current.dominated:
             print('hh')
@@ -129,6 +125,89 @@ def labeling_algorithm(pi, dis, customers, capacity, customer_number,target = No
 
     return [x.dis for x in final_labels],[x.path for x in final_labels]
 
+def labeling_algorithm_timelimits(pi, dis, customers, capacity, customer_number,time_limits,target = None):
+    if not target:
+        customer_list = set([i for i in range(customer_number + 2)])
+    else:
+        customer_list = set([i for i in range(customer_number + 2) if i in target])
+    customer_list.update({0,customer_number+1})
+    if not pi:
+        new_pi = [0 for _ in range(customer_number+2)]
+    else:
+        new_pi = pi
+    label = Label()
+    label.path = [0]
+    label.dis = 0
+    label.demand = 0
+    label.length = 1
+
+    queue = [label]
+    queue[-1].unreachable_cus.add(0)
+
+    path_dic = {}
+    path_dic[customer_number+1] = []
+    it = 0
+    time_now = time.time()
+    while len(queue) > 0:
+        #Todo the time limits
+        if time.time()-time_now>600:
+            print(time.time()-time_now)
+            break
+
+        current = queue.pop(0)
+        if current.dominated:
+            print('hh')
+            continue
+        it += 1
+        # if not it%500:
+        #     print(len(queue))
+        # if not count%100:
+        #     print(count)
+
+
+
+
+        last_node = current.path[-1]
+        if last_node == customer_number + 1:
+            continue
+
+        temp_labels = []
+        for customer in (customer_list-current.unreachable_cus):
+            if customer in current.unreachable_cus:
+                continue
+            if current.demand + customers[customer]['demand']<=capacity and current.time+customers[last_node]['service']+dis[last_node,customer]<=customers[customer]['end']:
+                temp_labels.append(current.expand(customers,customer,dis,last_node,new_pi))
+            else:
+                current.unreachable_cus.add(customer)
+
+        for new_label in temp_labels:
+            if new_label.path[-1]==customer_number+1:
+                path_dic[customer_number+1].append(new_label)
+                continue
+            else:
+                # the set of un_reachable_cus for current label is varying during the last iteration.
+                new_label.unreachable_cus.update(current.unreachable_cus)
+
+                if new_label.path[-1] in path_dic:
+                    path_dic[new_label.path[-1]] = dominate(new_label,path_dic[new_label.path[-1]])
+                else:
+                    path_dic[new_label.path[-1]] = [new_label]
+
+            if not new_label.dominated:
+                queue.append(new_label)
+
+
+    final_labels = path_dic[customer_number + 1]
+    min_cost = 100000
+    best_label = None
+    final_labels.sort(key = lambda x:x.dis)
+
+    # for label in final_labels:
+    #     if label.dis < min_cost:
+    #         min_cost = label.dis
+    #         best_label = label
+
+    return [x.dis for x in final_labels],[x.path for x in final_labels]
 if __name__ == '__main__':
     import pickle
     dual = [30.46, 36.0, 44.72, 50.0, 41.24, 22.36, 42.42, 52.5, 64.04, 51.0, 67.08, 30.0, 22.36, 64.04, 60.82, 58.3,

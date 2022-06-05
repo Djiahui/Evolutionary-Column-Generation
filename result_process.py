@@ -165,9 +165,74 @@ def improvement(result):
 		plt.show()
 
 
+def once_result_process(path):
+	result = csv.reader(open('ECG/once.csv','r'))
+	dic = {}
+
+	for line in result:
+		name = line[0].split('.')[0].split('_')[0]
+		ress = [float(x) for x in line[1:]]
+		if name[:2] in ['RC']:
+			cls = 'RC'+name[2]
+		else:
+			cls = name[:2]
+		if not cls in dic:
+			dic[cls] = {}
+
+		dic[cls][name] = ress
+
+	for cls in ['RC1','RC2','R2','R1','C1','C2']:
+		temp_res = dic[cls]
+		for key,item in temp_res.items():
+			plt.plot(range(len(item)), item, marker='*', label=key+str(sum(item)/len(item)))
+		plt.legend()
+		plt.title(cls)
+		plt.show()
+
+def once_result_compare(path1,path2):
+	result1 = csv.reader(open('ECG/once.csv','r'))
+	result2 = csv.reader(open('ECG/once2.csv', 'r'))
+	dic1 = {}
+	dic2 = {}
+
+	for line in result1:
+		name = line[0].split('.')[0].split('_')[0]
+		ress = [float(x) for x in line[1:]]
+		if name[:2] in ['RC']:
+			cls = 'RC'+name[2]
+		else:
+			cls = name[:2]
+		if not cls in dic1:
+			dic1[cls] = {}
+
+		dic1[cls][name] = ress
+
+	for line in result2:
+		name = line[0].split('.')[0].split('_')[0]
+		ress = [float(x) for x in line[1:]]
+		if name[:2] in ['RC']:
+			cls = 'RC'+name[2]
+		else:
+			cls = name[:2]
+		if not cls in dic2:
+			dic2[cls] = {}
+
+		dic2[cls][name] = ress
+
+	for cls in ['RC1','RC2','R2','R1','C1','C2']:
+		temp_res = dic1[cls]
+		for key,item in temp_res.items():
+			plt.plot(range(len(item)), item, marker='*', label='less')
+			temp2 = dic2[cls][key]
+			plt.plot(range(len(temp2)), temp2, marker='*', label='more')
+			plt.legend()
+			plt.title(key)
+			plt.savefig('com/'+key+'.png')
+			plt.show()
+
+once_result_compare('ECG/once.csv','ECG/once2.csv')
+# once_result_process('ECG/once.csv')
 
 
-
-
-mean_time_obj(data_read())
-improvement(data_read())
+# mean_time_obj(data_read())
+# improvement(data_read())

@@ -65,9 +65,11 @@ class Population(object):
 
 		self.crossover_num = customer_num // Parameter.parameter.coffie_max_iter
 		self.iteration_num = customer_num // Parameter.parameter.coffie_max_iter
-		self.max_num_childres = customer_num // Parameter.parameter.coffie_max_child
+		self.max_num_childres = customer_num *2
 		self.update_iter = 10
 		self.max_num_append = 5
+
+		self.tau = set()
 
 	def deter_in_tau(self, pop):
 		for cus in pop.path[1:-1]:
@@ -1193,6 +1195,8 @@ class Solver(object):
 			obj_list.append(obj)
 
 			dual_cur = [0] + dual + [0]
+			obj = self.once_solve(dual_cur)
+			return obj
 
 			best_reduced_cost = self.paths_generate(dual_cur)
 			print(obj,best_reduced_cost)
@@ -1280,15 +1284,30 @@ class Solver(object):
 				keys = list(dic_1.keys())
 				dic_2 = {}
 
+	def once_solve(self, dual_cur):
 
-
+		self.population.pops = self.routes_archive[:self.customer_num]
+		for ind in self.population.pops:
+			ind.evaluate_under_dual(dual_cur)
+		best_spp_obj = 1e6
+		no_improvement = 0
+		while no_improvement <= 10:
+			archive = self.population.iteration(dual_cur)
+			self.population.pops_update(archive)
+			if self.population.pops[0].cost<best_spp_obj:
+				best_spp_obj = self.population.pops[0].cost
+				no_improvement = 0
+			else:
+				no_improvement += 1
+		return best_spp_obj
 
 
 
 if __name__ == '__main__':
-	solver = Solver('../data/largeRC102_200_800.csv', 200, 800)
-	solver.solve(False)
-	exit()
+	# solver = Solver('../data/largeRC102_200_800.csv', 200, 800)
+	# spp_obj = solver.solve(False)
+	#
+	# exit()
 
 	# dual = [30.46, 36.0, 44.72, 50.0, 41.24, 22.36, 42.42, 52.5, 64.04, 51.0, 67.08, 30.0, 22.36, 64.04, 60.82, 58.3,
 	# 		60.82, 31.62, 64.04, 63.24, 36.06, 53.86, 72.12, 60.0, -9.77000000000001, 22.36, 10.0, 12.64, 59.66, 51.0,
@@ -1326,26 +1345,17 @@ if __name__ == '__main__':
 	import os
 	import csv
 	mode = False
+	f = open('once2.csv', 'w', newline='')
+	wrt = csv.writer(f)
 	for problem in os.listdir('../data'):
 		if problem[0] != 'l' and problem[-1] == 'v':
 			temp = problem.split('.')[0].split('_')
 			cap = int(temp[1])
 			num = int(temp[-1])
-			name = 'result_' + str(mode) +'.csv'
-			if os.path.exists(name):
-				f = open(name, 'a+', newline='')
-			else:
-				f = open(name, 'w', newline='')
-			wrt = csv.writer(f)
 			objs = []
-			times = []
-			for _ in range(20):
+			for _ in range(10):
 				slover = Solver('../data/' + problem, num, cap)
-				obj, time_used = slover.solve(mode)
-				print(problem + '---' + str(_) + 'th---' + str(obj) + '---' + str(time_used))
-				objs.append(obj)
-				times.append(time_used)
-
-			wrt.writerow([problem, 'obj'] + objs)
-			wrt.writerow([problem, 'time'] + times)
-			print(problem + '-----done')
+				spp_obj= slover.solve(mode)
+				print(problem,spp_obj)
+				objs.append(spp_obj)
+			wrt.writerow([problem] + objs)
